@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAILKAVACH - Railway Asset Management System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <h1>RAILKAVACH</h1>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li class="active"><a href="#asset-registry"><i class="fas fa-clipboard-list"></i> Asset Registry</a></li>
+                    <li><a href="#portal-integrations"><i class="fas fa-link"></i> Portal Integrations</a></li>
+                    <li><a href="#inventory-status"><i class="fas fa-boxes"></i> Inventory Status</a></li>
+                    <li><a href="#qr-generator"><i class="fas fa-qrcode"></i> QR Generator</a></li>
+                    <li><a href="#scan-qr"><i class="fas fa-camera"></i> Scan QR</a></li>
+                    <li><a href="#ai-report"><i class="fas fa-robot"></i> AI-Based Report</a></li>
+                </ul>
+            </nav>
+            <div class="user-menu">
+                <button class="user-btn"><i class="fas fa-user-circle"></i></button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Asset Registry Section -->
+            <section id="asset-registry" class="section active">
+                <div class="section-header">
+                    <h2>Asset Registry</h2>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Registered Assets</h3>
+                        <div class="actions">
+                            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Asset</button>
+                            <button class="btn btn-secondary"><i class="fas fa-filter"></i> Filter</button>
+                            <button class="btn btn-secondary"><i class="fas fa-download"></i> Export</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Asset ID</th>
+                                    <th>Type</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Sample data, will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                        <div class="pagination">
+                            <button class="btn-page"><i class="fas fa-chevron-left"></i></button>
+                            <span>Page 1 of 1</span>
+                            <button class="btn-page"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Portal Integrations Section -->
+            <section id="portal-integrations" class="section">
+                <div class="section-header">
+                    <h2>Portal Integrations</h2>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="card portal-card">
+                        <div class="card-header">
+                            <h3>UDM Portal</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="portal-status">
+                                <i class="fas fa-check-circle portal-connected"></i>
+                                <p>UDM Portal is connected and integrated</p>
+                                <div class="portal-details">
+                                    <span>Last sync: Today, 10:45 AM</span>
+                                    <button class="btn btn-primary btn-sm">View Details</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card portal-card">
+                        <div class="card-header">
+                            <h3>TMS Portal</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="portal-status">
+                                <i class="fas fa-check-circle portal-connected"></i>
+                                <p>TMS Portal is connected and integrated</p>
+                                <div class="portal-details">
+                                    <span>Last sync: Today, 10:30 AM</span>
+                                    <button class="btn btn-primary btn-sm">View Details</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory Status Section -->
+            <section id="inventory-status" class="section">
+                <div class="section-header">
+                    <h2>Inventory Status</h2>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Inventory Status</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="inventoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Inspection Status</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="inspectionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Vendor Performance</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="vendorChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3>Inventory Status - All Items</h3>
+                        <div class="actions">
+                            <button class="btn btn-secondary"><i class="fas fa-filter"></i> Filter</button>
+                            <button class="btn btn-secondary"><i class="fas fa-download"></i> Export</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Batch</th>
+                                    <th>Vendor</th>
+                                    <th>Warranty</th>
+                                    <th>Created At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Sample data, will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- QR Generator Section -->
+            <section id="qr-generator" class="section">
+                <div class="section-header">
+                    <h2>QR Generator</h2>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="qr-generator-form">
+                            <div class="form-group">
+                                <label for="vendor-name">Vendor Name</label>
+                                <input type="text" id="vendor-name" placeholder="Enter vendor name">
+                            </div>
+                            <div class="form-group">
+                                <label for="batch-number">Batch Number</label>
+                                <input type="text" id="batch-number" placeholder="Enter batch number">
+                            </div>
+                            <div class="form-group">
+                                <label for="supply-date">Date of Supply</label>
+                                <input type="date" id="supply-date">
+                            </div>
+                            <div class="form-group">
+                                <label for="warranty-period">Warranty Period (months)</label>
+                                <input type="number" id="warranty-period" min="0" placeholder="Enter warranty period">
+                            </div>
+                            <div class="form-group">
+                                <label for="current-status">Current Status</label>
+                                <select id="current-status">
+                                    <option value="active">Active</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="expired">Warranty Expired</option>
+                                    <option value="maintenance">Under Maintenance</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" id="generate-qr"><i class="fas fa-qrcode"></i> Generate QR Code</button>
+                            <button class="btn btn-secondary" id="download-qr" disabled><i class="fas fa-download"></i> Download QR</button>
+                        </div>
+                        <div class="qr-result">
+                            <div id="qr-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Scan QR Section -->
+            <section id="scan-qr" class="section">
+                <div class="section-header">
+                    <h2>Scan QR</h2>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="scanner-container">
+                            <div id="qr-reader"></div>
+                            <div class="scanner-controls">
+                                <button class="btn btn-primary" id="start-scanner"><i class="fas fa-play"></i> Start Scanner</button>
+                                <button class="btn btn-secondary" id="stop-scanner" disabled><i class="fas fa-stop"></i> Stop</button>
+                            </div>
+                        </div>
+                        <div class="scan-result">
+                            <h3>Scan Result</h3>
+                            <div id="scan-result-data">
+                                <p>No data scanned yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI-Based Report Section -->
+            <section id="ai-report" class="section">
+                <div class="section-header">
+                    <h2>AI-Based Report</h2>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="ai-report-form">
+                            <div class="form-group">
+                                <label for="report-type">Report Type</label>
+                                <select id="report-type">
+                                    <option value="">Select Report Type</option>
+                                    <option value="maintenance">Maintenance Prediction</option>
+                                    <option value="failure">Failure Analysis</option>
+                                    <option value="lifecycle">Lifecycle Assessment</option>
+                                    <option value="optimization">Resource Optimization</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="time-period">Time Period</label>
+                                <select id="time-period">
+                                    <option value="">Select Time Period</option>
+                                    <option value="1month">Last Month</option>
+                                    <option value="3months">Last 3 Months</option>
+                                    <option value="6months">Last 6 Months</option>
+                                    <option value="1year">Last Year</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" id="generate-report"><i class="fas fa-chart-line"></i> Generate Report</button>
+                            </div>
+                        </div>
+                        <div class="report-result">
+                            <div id="report-container">
+                                <p>Select report type and time period to generate AI-based insights</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="app.js"></script>
+</body>
+</html>

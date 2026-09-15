@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAILKAVACH - Create Account</title>
+<link rel="stylesheet" href="login-styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="login-container"><div class="login-card">
+  <div class="logo-container">
+    <div class="logo-icon"><i class="fas fa-user-plus"></i></div>
+    <h1>Create Account</h1>
+    <p class="subtitle">Join the RAILKAVACH system</p>
+  </div>
+  <form id="register-form" novalidate>
+    <div class="form-group"><label for="name">Full Name</label><input id="name" autocomplete="name" placeholder="Enter your name" required></div>
+    <div class="form-group"><label for="email">Email</label><input id="email" type="email" autocomplete="email" placeholder="Enter your email" required></div>
+    <div class="form-group"><label for="password">Password</label><div class="password-wrap"><input id="password" type="password" autocomplete="new-password" placeholder="Minimum 8 characters" required><button type="button" id="toggle-password"><i class="fas fa-eye"></i></button></div></div>
+    <div class="form-group"><label for="confirmPassword">Confirm Password</label><input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Re-enter your password" required></div>
+    <div class="role-info"><i class="fas fa-info-circle"></i> New accounts are created as <strong>Operator</strong>. Only an Admin can assign Manager, Inspector or Admin roles.</div>
+    <button class="login-btn" id="register-btn" type="submit">Create Account</button>
+  </form>
+  <div id="register-status" class="login-status" aria-live="polite"></div>
+  <div class="register-link">Already have an account? <a href="login.html">Back to Login</a></div>
+</div></div>
+<script src="register.js"></script>
+<script src="dynamic-bg.js"></script>
+</body>
+</html>

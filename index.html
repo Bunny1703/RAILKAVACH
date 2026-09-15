@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAILKAVACH - Railway Asset Management System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container" data-collapsed="false">
+
+        <!-- Sidebar overlay for mobile -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="brand">
+                    <span class="brand-mark"><i class="fas fa-shield-halved"></i></span>
+                    <span class="brand-name">RAIL<b>KAVACH</b></span>
+                </div>
+                <button class="icon-btn sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Collapse sidebar">
+                    <i class="fas fa-angles-left"></i>
+                </button>
+            </div>
+
+            <nav class="main-nav">
+                <span class="nav-label">Overview</span>
+                <ul>
+                    <li class="active"><a href="#overview" data-tip="Overview"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a></li>
+                </ul>
+                <span class="nav-label">Assets</span>
+                <ul>
+                    <li><a href="#asset-registry" data-tip="Asset Registry"><i class="fas fa-clipboard-list"></i><span>Asset Registry</span></a></li>
+                    <li><a href="#inventory-status" data-tip="Inventory Status"><i class="fas fa-boxes-stacked"></i><span>Inventory Status</span></a></li>
+                    <li><a href="#inspections" data-tip="Inspections"><i class="fas fa-clipboard-check"></i><span>Inspections</span></a></li>
+                                    </ul>
+                <span class="nav-label">Monitoring</span>
+                <ul>
+                    <li><a href="#risk-center" data-tip="Risk Center"><i class="fas fa-shield-heart"></i><span>Risk Center</span></a></li>
+                    <li><a href="#activity-log" data-tip="Activity Log"><i class="fas fa-clock-rotate-left"></i><span>Activity Log</span></a></li>
+                </ul>
+                <span class="nav-label">Tools</span>
+                <ul>
+                    <li><a href="#qr-generator" data-tip="QR Generator"><i class="fas fa-qrcode"></i><span>QR Generator</span></a></li>
+                    <li><a href="#scan-qr" data-tip="Scan QR"><i class="fas fa-camera"></i><span>Scan QR</span></a></li>
+                    <li><a href="#ai-inspection" data-tip="AI Visual Inspection"><i class="fas fa-microscope"></i><span>AI Visual Inspection</span></a></li>
+                    <li><a href="#ai-report" data-tip="AI-Based Report"><i class="fas fa-robot"></i><span>AI-Based Report</span></a></li>
+                </ul>
+                <span class="nav-label">Connections</span>
+                <ul>
+                    <li><a href="#portal-integrations" data-tip="Portal Integrations"><i class="fas fa-plug-circle-bolt"></i><span>Portal Integrations</span></a></li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <button class="theme-toggle" id="theme-toggle" data-tip="Toggle theme" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon"></i>
+                    <span>Dark mode</span>
+                    <span class="switch"><span class="switch-knob"></span></span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main column -->
+        <div class="main-column">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="icon-btn" id="mobile-menu-btn" aria-label="Open menu"><i class="fas fa-bars"></i></button>
+                    <div class="page-title">
+                        <h1 id="page-title-text">Dashboard</h1>
+                        <span class="page-subtitle" id="page-subtitle-text">Live snapshot of your railway assets</span><span id="live-updated-at" class="live-updated-at">Connecting…</span>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <div class="global-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="global-search" placeholder="Search assets, batches, vendors..." autocomplete="off">
+                        <kbd>/</kbd>
+                    </div>
+                    <div class="topbar-icon-group"><button class="icon-btn" id="refresh-data-btn" aria-label="Refresh live data" title="Refresh live data"><i class="fas fa-arrows-rotate"></i></button>
+                        <div class="notif-wrap">
+                            <button class="icon-btn" id="notif-btn" aria-label="Notifications" title="Notifications">
+                                <i class="fas fa-bell"></i>
+                                <span class="badge-dot" id="notif-count">3</span>
+                            </button>
+                            <div class="notif-dropdown" id="notif-dropdown">
+                                <div class="notif-dropdown-header">
+                                    <span>Notifications</span>
+                                    <button class="link-btn" id="notif-clear">Mark all read</button>
+                                </div>
+                                <div class="notif-list" id="notif-list"></div>
+                            </div>
+                        </div>
+                        <div class="user-menu-wrap">
+                            <button class="user-btn" id="user-btn">
+                                <span class="avatar"><i class="fas fa-user"></i></span>
+                                <span class="user-btn-label">Account</span>
+                                <i class="fas fa-chevron-down user-chevron"></i>
+                            </button>
+                            <div class="user-dropdown" id="user-dropdown">
+                                <div class="user-dropdown-info">
+                                    <span class="ud-name" id="ud-name">—</span>
+                                    <span class="ud-email" id="ud-email">—</span>
+                                </div>
+                                <a href="#" class="user-dropdown-item" id="admin-users-link" style="display:none;">
+                                    <i class="fas fa-users-cog"></i> User Management
+                                </a>
+                                <button class="user-dropdown-item danger" id="logout-btn">
+                                    <i class="fas fa-arrow-right-from-bracket"></i> Log out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="main-content">
+
+                <!-- Overview / Dashboard Section -->
+                <section id="overview" class="section active">
+                    <div class="stat-grid" id="stat-grid">
+                        <div class="stat-card" data-accent="blue">
+                            <div class="stat-icon"><i class="fas fa-cubes"></i></div>
+                            <div class="stat-body">
+                                <span class="stat-label">Total Assets</span>
+                                <span class="stat-value" id="stat-total">0</span>
+                                <span class="stat-trend up"><i class="fas fa-circle-check"></i> Live from database</span>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-accent="green">
+                            <div class="stat-icon"><i class="fas fa-circle-check"></i></div>
+                            <div class="stat-body">
+                                <span class="stat-label">Active</span>
+                                <span class="stat-value" id="stat-active">0</span>
+                                <span class="stat-trend up"><i class="fas fa-database"></i> Current status</span>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-accent="amber">
+                            <div class="stat-icon"><i class="fas fa-screwdriver-wrench"></i></div>
+                            <div class="stat-body">
+                                <span class="stat-label">In Maintenance</span>
+                                <span class="stat-value" id="stat-maintenance">0</span>
+                                <span class="stat-trend"><i class="fas fa-clock"></i> Current status</span>
+                            </div>
+                        </div>
+                        <div class="stat-card" data-accent="red">
+                            <div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                            <div class="stat-body">
+                                <span class="stat-label">Inactive</span>
+                                <span class="stat-value" id="stat-inactive">0</span>
+                                <span class="stat-trend down"><i class="fas fa-database"></i> Current status</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="overview-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Fleet Status</h3>
+                                <span class="pill pill-live"><span class="live-dot"></span>Live</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container chart-container-sm">
+                                    <canvas id="overviewChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Quick Actions</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="quick-actions">
+                                    <button class="quick-action" data-goto="qr-generator">
+                                        <i class="fas fa-qrcode"></i>
+                                        <span>Generate QR</span>
+                                    </button>
+                                    <button class="quick-action" data-goto="scan-qr">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Scan Asset</span>
+                                    </button>
+                                    <button class="quick-action" data-goto="asset-registry">
+                                        <i class="fas fa-plus"></i>
+                                        <span>Add Asset</span>
+                                    </button>
+                                    <button class="quick-action" data-goto="ai-inspection">
+                                        <i class="fas fa-microscope"></i>
+                                        <span>Inspect Image</span>
+                                    </button>
+                                    <button class="quick-action" data-goto="ai-report">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>AI Report</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card full-width">
+                            <div class="card-header">
+                                <h3>Recent Activity</h3>
+                            </div>
+                            <div class="card-body">
+                                <ul class="activity-list" id="activity-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Risk Center Section -->
+                <section id="risk-center" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><h3>Risk Center</h3><p class="card-subtitle">Live asset risk, inspection health and ML coverage.</p></div>
+                            <button class="btn btn-secondary" id="risk-center-refresh"><i class="fas fa-arrows-rotate"></i> Refresh Risk</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="risk-center-stats">
+                                <div class="risk-stat"><span>LOW</span><strong id="risk-low-count">0</strong></div>
+                                <div class="risk-stat"><span>MEDIUM</span><strong id="risk-medium-count">0</strong></div>
+                                <div class="risk-stat"><span>HIGH</span><strong id="risk-high-count">0</strong></div>
+                                <div class="risk-stat"><span>CRITICAL</span><strong id="risk-critical-count">0</strong></div>
+                                <div class="risk-stat"><span>ML ASSESSED</span><strong id="risk-ml-count">0</strong></div>
+                            </div>
+                            <div class="risk-center-layout">
+                                <div class="chart-container"><canvas id="riskCenterChart"></canvas></div>
+                                <div>
+                                    <h4>High-risk assets</h4>
+                                    <div class="risk-list" id="high-risk-list"><div class="empty-state"><p>Loading risk data…</p></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Asset Registry Section -->
+                <section id="asset-registry" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Registered Assets</h3>
+                            <div class="actions">
+                                <div class="table-search">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="asset-search" placeholder="Filter assets...">
+                                </div>
+                                <button class="btn btn-secondary" id="asset-filter-status" title="Cycle status filter"><i class="fas fa-filter"></i> <span id="asset-filter-label">All statuses</span></button>
+                                <button class="btn btn-secondary" id="asset-export"><i class="fas fa-download"></i> Export</button>
+                                <button class="btn btn-primary" id="asset-add"><i class="fas fa-plus"></i> Add Asset</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-scroll">
+                                <table class="data-table" id="asset-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-sort="id">Asset ID <i class="fas fa-sort"></i></th>
+                                            <th data-sort="type">Type <i class="fas fa-sort"></i></th>
+                                            <th data-sort="location">Location <i class="fas fa-sort"></i></th>
+                                            <th data-sort="status">Status <i class="fas fa-sort"></i></th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <div class="table-footer">
+                                <span class="table-count" id="asset-count"></span>
+                                <div class="pagination">
+                                    <button class="btn-page" id="asset-prev"><i class="fas fa-chevron-left"></i></button>
+                                    <span id="asset-page-label">Page 1 of 1</span>
+                                    <button class="btn-page" id="asset-next"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Portal Integrations Section -->
+                <section id="portal-integrations" class="section">
+                    <div class="dashboard-grid">
+                        <div class="card portal-card">
+                            <div class="card-header">
+                                <h3>UDM Portal</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="portal-status">
+                                    <i class="fas fa-check-circle portal-connected"></i>
+                                    <p>UDM Portal is connected and integrated</p>
+                                    <div class="portal-details">
+                                        <span>Last sync: Today, 10:45 AM</span>
+                                        <button class="btn btn-primary btn-sm">View Details</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card portal-card">
+                            <div class="card-header">
+                                <h3>TMS Portal</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="portal-status">
+                                    <i class="fas fa-check-circle portal-connected"></i>
+                                    <p>TMS Portal is connected and integrated</p>
+                                    <div class="portal-details">
+                                        <span>Last sync: Today, 10:30 AM</span>
+                                        <button class="btn btn-primary btn-sm">View Details</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Inventory Status Section -->
+                <section id="inventory-status" class="section">
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Inventory Status</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="inventoryChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Inspection Status</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="inspectionChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Vendor Performance</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="vendorChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card full-width">
+                        <div class="card-header">
+                            <h3>Inventory Status - All Items</h3>
+                            <div class="actions">
+                                <div class="table-search">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="inventory-search" placeholder="Filter inventory...">
+                                </div>
+                                <button class="btn btn-secondary" id="inventory-export"><i class="fas fa-download"></i> Export</button><button class="btn btn-primary" id="inventory-add"><i class="fas fa-plus"></i> Add Inventory</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-scroll">
+                                <table class="data-table" id="inventory-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-sort="id">ID <i class="fas fa-sort"></i></th>
+                                            <th data-sort="type">Type <i class="fas fa-sort"></i></th>
+                                            <th data-sort="batch">Batch <i class="fas fa-sort"></i></th>
+                                            <th data-sort="vendor">Vendor <i class="fas fa-sort"></i></th>
+                                            <th data-sort="warranty_months">Warranty <i class="fas fa-sort"></i></th>
+                                            <th data-sort="status">Status <i class="fas fa-sort"></i></th>
+                                            <th data-sort="supply_date">Supply Date <i class="fas fa-sort"></i></th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <span class="table-count" id="inventory-count"></span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Inspections Section -->
+                <section id="inspections" class="section">
+                    <div class="card inspection-card">
+                        <div class="card-header">
+                            <div>
+                                <h3>Inspection Management</h3>
+                                <p class="card-subtitle">Record, review and track railway asset inspections in real time.</p>
+                            </div>
+                            <div class="actions">
+                                <div class="table-search">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="inspection-search" placeholder="Search asset, status or notes...">
+                                </div>
+                                <button class="btn btn-secondary" id="inspection-export"><i class="fas fa-download"></i> Export</button>
+                                <button class="btn btn-primary" id="inspection-add"><i class="fas fa-plus"></i> New Inspection</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="inspection-summary-grid" id="inspection-summary-grid" role="tablist" aria-label="Filter inspections by status">
+                                <button type="button" class="mini-stat is-clickable is-active" data-status-filter="">
+                                    <span class="mini-stat-icon all"><i class="fas fa-layer-group"></i></span>
+                                    <span class="mini-stat-copy"><span>Total</span><strong id="inspection-total-count">0</strong></span>
+                                </button>
+                                <button type="button" class="mini-stat is-clickable" data-status-filter="Passed">
+                                    <span class="mini-stat-icon success"><i class="fas fa-circle-check"></i></span>
+                                    <span class="mini-stat-copy"><span>Passed</span><strong id="inspection-passed-count">0</strong></span>
+                                </button>
+                                <button type="button" class="mini-stat is-clickable" data-status-filter="Pending">
+                                    <span class="mini-stat-icon warning"><i class="fas fa-hourglass-half"></i></span>
+                                    <span class="mini-stat-copy"><span>Pending</span><strong id="inspection-pending-count">0</strong></span>
+                                </button>
+                                <button type="button" class="mini-stat is-clickable" data-status-filter="Failed">
+                                    <span class="mini-stat-icon danger"><i class="fas fa-triangle-exclamation"></i></span>
+                                    <span class="mini-stat-copy"><span>Failed</span><strong id="inspection-failed-count">0</strong></span>
+                                </button>
+                            </div>
+                            <div class="table-scroll">
+                                <table class="data-table" id="inspection-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-sort="asset_id">Asset ID <i class="fas fa-sort"></i></th>
+                                            <th data-sort="status">Status <i class="fas fa-sort"></i></th>
+                                            <th data-sort="inspected_at">Inspection Date <i class="fas fa-sort"></i></th>
+                                            <th>Inspector</th>
+                                            <th>Risk</th>
+                                            <th>Notes</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="inspection-skeleton-row"><td colspan="7"><div class="skeleton-line"></div></td></tr>
+                                        <tr class="inspection-skeleton-row"><td colspan="7"><div class="skeleton-line"></div></td></tr>
+                                        <tr class="inspection-skeleton-row"><td colspan="7"><div class="skeleton-line"></div></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="table-footer">
+                                <span class="table-count" id="inspection-count"></span>
+                                <div class="pagination">
+                                    <button class="btn-page" id="inspection-prev" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>
+                                    <span id="inspection-page-label">Page 1 of 1</span>
+                                    <button class="btn-page" id="inspection-next" aria-label="Next page"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Activity Log Section -->
+                <section id="activity-log" class="section">
+                    <div class="card full-width">
+                        <div class="card-header">
+                            <div>
+                                <h3>Activity Log</h3>
+                                <p class="card-subtitle">Track important asset, inventory and inspection changes.</p>
+                            </div>
+                            <div class="actions">
+                                <div class="table-search"><i class="fas fa-search"></i><input type="text" id="audit-search" placeholder="Search activity..."></div>
+                                <button class="btn btn-secondary" id="audit-export"><i class="fas fa-download"></i> Export</button>
+                                <button class="btn btn-primary" id="audit-refresh"><i class="fas fa-arrows-rotate"></i> Refresh</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="audit-summary" id="audit-summary"></div>
+                            <div class="table-scroll">
+                                <table class="data-table" id="audit-table">
+                                    <thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>ID</th><th>Actor</th><th>Details</th></tr></thead>
+                                    <tbody><tr><td colspan="6"><div class="loading-inline"><span class="spinner"></span> Loading activity...</div></td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- QR Generator Section -->
+                <section id="qr-generator" class="section">
+                    <div class="qr-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Component Details</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="qr-generator-form">
+                                    <div class="form-group">
+                                        <label for="component-type">Component Type</label>
+                                        <input type="text" id="component-type" placeholder="Rail, Sleeper, Ballast...">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="component-location">Location / Section</label>
+                                        <input type="text" id="component-location" placeholder="Section A-12">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vendor-name">Vendor Name</label>
+                                        <input type="text" id="vendor-name" placeholder="Enter vendor name">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="batch-number">Batch Number</label>
+                                        <input type="text" id="batch-number" placeholder="Enter batch number">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="supply-date">Date of Supply</label>
+                                        <input type="date" id="supply-date">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="warranty-period">Warranty Period (months)</label>
+                                        <input type="number" id="warranty-period" min="0" placeholder="Enter warranty period">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="current-status">Current Status</label>
+                                        <select id="current-status">
+                                            <option value="In Stock">In Stock</option>
+                                            <option value="Deployed">Deployed</option>
+                                            <option value="Maintenance">Under Maintenance</option>
+                                            <option value="Disposed">Disposed</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-actions form-actions-inline">
+                                    <button class="btn btn-primary" id="generate-qr"><i class="fas fa-qrcode"></i> Generate QR Code</button>
+                                    <button class="btn btn-secondary" id="download-qr" disabled><i class="fas fa-download"></i> Download</button>
+                                    <button class="btn btn-secondary" id="copy-qr-data" disabled><i class="fas fa-copy"></i> Copy Data</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Preview</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="qr-result">
+                                    <div id="qr-container">
+                                        <div class="qr-placeholder">
+                                            <i class="fas fa-qrcode"></i>
+                                            <p>Fill in the details and generate a QR code to preview it here</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Scan QR Section -->
+                <section id="scan-qr" class="section">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="scanner-container">
+                                <div id="qr-reader"></div>
+                                <div class="scanner-controls">
+                                    <button class="btn btn-primary" id="start-scanner"><i class="fas fa-play"></i> Start Scanner</button>
+                                    <button class="btn btn-secondary" id="stop-scanner" disabled><i class="fas fa-stop"></i> Stop</button>
+                                </div>
+                            </div>
+                            <div class="scan-result">
+                                <h3>Scan Result</h3>
+                                <div id="scan-result-data">
+                                    <div class="empty-state">
+                                        <i class="fas fa-qrcode"></i>
+                                        <p>No data scanned yet — start the scanner to read an asset tag</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- AI Visual Inspection Section -->
+                <section id="ai-inspection" class="section">
+                    <div class="ai-inspection-hero">
+                        <div>
+                            <span class="eyebrow">COMPUTER VISION</span>
+                            <h2>AI Visual Inspection</h2>
+                            <p>Upload a component image to run YOLO detection and get an instant visual-risk summary.</p>
+                        </div>
+                        <div class="ai-pipeline">
+                            <span>Image</span><i class="fas fa-arrow-right"></i><span>YOLO</span><i class="fas fa-arrow-right"></i><span>Risk</span>
+                        </div>
+                    </div>
+                    <div class="ai-inspection-grid">
+                        <div class="card ai-upload-card">
+                            <div class="card-header">
+                                <div><h3>Run inspection</h3><p class="card-subtitle">Use JPG, PNG or WebP · optimized automatically for fast analysis</p></div>
+                                <span class="ai-model-badge" id="ai-model-badge">Checking model…</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="ai-upload-zone" id="ai-upload-zone">
+                                    <input type="file" id="ai-image-input" accept="image/png,image/jpeg,image/webp" hidden>
+                                    <div class="ai-upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                                    <h4>Drop an image here</h4>
+                                    <p>or choose a railway component image from your computer</p>
+                                    <button type="button" class="btn btn-secondary" id="ai-choose-image"><i class="fas fa-folder-open"></i> Choose image</button>
+                                </div>
+                                <div class="ai-selected-file" id="ai-selected-file" hidden></div>
+                                <button class="btn btn-primary ai-analyze-btn" id="ai-analyze-btn" disabled><i class="fas fa-wand-magic-sparkles"></i> Analyze image</button>
+                            </div>
+                        </div>
+                        <div class="card ai-result-card-wrap">
+                            <div class="card-header"><div><h3>Inspection result</h3><p class="card-subtitle">Detection confidence and visual condition</p></div><span id="ai-result-status" class="status-badge">Waiting</span></div>
+                            <div class="card-body" id="ai-result-container">
+                                <div class="ai-empty-result"><i class="fas fa-microscope"></i><h4>No image analyzed</h4><p>Choose an image and run the inspection to see detections here.</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card ai-disclaimer">
+                        <div><i class="fas fa-circle-info"></i><div><strong>Model status</strong><p id="ai-model-note">The image is optimized in your browser before upload. The YOLO model stays loaded in a persistent local worker for faster repeat inspections. The railway-specific model is used when <code>ml/model/railway_defect_yolo.pt</code> is available; otherwise the bundled model runs in demo mode.</p></div></div>
+                    </div>
+                </section>
+
+                <!-- AI-Based Report Section -->
+                <section id="ai-report" class="section">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="ai-report-form">
+                                <div class="form-group">
+                                    <label for="report-type">Report Type</label>
+                                    <select id="report-type">
+                                        <option value="">Select Report Type</option>
+                                        <option value="maintenance">Maintenance Prediction</option>
+                                        <option value="failure">Failure Analysis</option>
+                                        <option value="lifecycle">Lifecycle Assessment</option>
+                                        <option value="optimization">Resource Optimization</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="report-asset-filter">Asset</label>
+                                    <select id="report-asset-filter">
+                                        <option value="">All Assets</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="report-risk-filter">Risk</label>
+                                    <select id="report-risk-filter">
+                                        <option value="">All Risks</option>
+                                        <option value="LOW">LOW</option>
+                                        <option value="MEDIUM">MEDIUM</option>
+                                        <option value="HIGH">HIGH</option>
+                                        <option value="CRITICAL">CRITICAL</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="time-period">Time Period</label>
+                                    <select id="time-period">
+                                        <option value="">Select Time Period</option>
+                                        <option value="1month">Last Month</option>
+                                        <option value="3months">Last 3 Months</option>
+                                        <option value="6months">Last 6 Months</option>
+                                        <option value="1year">Last Year</option>
+                                    </select>
+                                </div>
+                                <div class="form-actions">
+                                    <button class="btn btn-primary" id="generate-report"><i class="fas fa-chart-line"></i> Generate Report</button>
+                                    <button class="btn btn-secondary" id="report-csv" disabled><i class="fas fa-file-csv"></i> CSV</button>
+                                    <button class="btn btn-secondary" id="report-pdf" disabled><i class="fas fa-file-pdf"></i> PDF</button>
+                                </div>
+                            </div>
+                            <div class="report-result">
+                                <div id="report-container">
+                                    <div class="empty-state">
+                                        <i class="fas fa-robot"></i>
+                                        <p>Select a report type and time period to generate AI-based insights</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+    <!-- Confirm dialog -->
+    <div class="confirm-overlay" id="confirm-overlay">
+        <div class="confirm-box">
+            <h4 id="confirm-title">Are you sure?</h4>
+            <p id="confirm-message"></p>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+                <button class="btn btn-danger" id="confirm-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="app.js"></script>
+<script src="dynamic-bg.js"></script>
+</body>
+</html>

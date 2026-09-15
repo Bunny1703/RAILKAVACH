@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>RAILKAVACH · User Administration</title>
+<link rel="stylesheet" href="admin-users.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="admin-shell">
+<header class="admin-topbar">
+  <div class="brand"><div class="brand-icon"><i class="fas fa-shield-halved"></i></div><div><h1>RAILKAVACH</h1><p>User Administration</p></div></div>
+  <div class="top-actions"><button class="btn btn-secondary" id="refresh-users"><i class="fas fa-rotate"></i> Refresh</button><button class="btn btn-secondary" id="back-btn"><i class="fas fa-arrow-left"></i> Dashboard</button></div>
+</header>
+<main class="admin-main">
+  <div class="page-head"><div><h2>Manage users</h2><p>Create accounts, assign roles and control access from one place.</p></div><button class="btn btn-primary" id="open-create"><i class="fas fa-user-plus"></i> Add User</button></div>
+  <section class="stats">
+    <div class="stat"><span>Total users</span><strong id="stat-total">—</strong></div>
+    <div class="stat"><span>Active users</span><strong id="stat-active">—</strong></div>
+    <div class="stat"><span>Administrators</span><strong id="stat-admin">—</strong></div>
+    <div class="stat"><span>Google linked</span><strong id="stat-google">—</strong></div>
+  </section>
+  <div class="toolbar">
+    <div class="filters"><input class="input search" id="user-search" placeholder="Search by name or email…" autocomplete="off"><select class="select" id="role-filter"><option value="">All roles</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="inspector">Inspector</option><option value="operator">Operator</option></select><select class="select" id="status-filter"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+  </div>
+  <div id="admin-status" class="status-msg" aria-live="polite"></div>
+  <section class="table-card"><div id="users-loading" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading users…</div>
+    <table id="users-table" style="display:none"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Login</th><th>Created</th><th>Actions</th></tr></thead><tbody id="users-body"></tbody></table>
+    <div id="users-empty" class="empty" style="display:none"><i class="fas fa-users-slash" style="font-size:28px"></i><p>No users match your filters.</p></div>
+  </section>
+  <p class="footer-note"><i class="fas fa-lock"></i> Only administrators can access this page. Passwords are never displayed.</p>
+</main>
+</div>
+
+<div class="modal-backdrop" id="user-modal">
+  <div class="modal">
+    <div class="modal-head"><div><h3>Create a user</h3><p>Give the user only the role they need.</p></div><button class="close" id="close-modal" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+    <form id="create-user-form">
+      <div class="form-grid">
+        <div class="field"><label for="name">Full name</label><input class="input" id="name" required maxlength="80" placeholder="e.g. Ravi Kumar"></div>
+        <div class="field"><label for="email">Email address</label><input class="input" id="email" type="email" required placeholder="name@example.com" autocomplete="email"></div>
+        <div class="field"><label for="password">Temporary password</label><div class="password-wrap"><input class="input" id="password" type="password" minlength="8" required placeholder="At least 8 characters" autocomplete="new-password"><button type="button" id="toggle-password"><i class="fas fa-eye"></i></button></div><div class="strength"><i id="strength-bar"></i></div></div>
+        <div class="field"><label for="role">Role</label><select class="select" id="role"><option value="operator">Operator · daily operations</option><option value="inspector">Inspector · inspections</option><option value="manager">Manager · oversight</option><option value="admin">Admin · full access</option></select></div>
+      </div>
+      <div class="form-actions"><button type="button" class="btn btn-secondary" id="cancel-create">Cancel</button><button class="btn btn-primary" type="submit"><i class="fas fa-user-plus"></i> Create User</button></div>
+    </form>
+  </div>
+</div>
+<script src="admin-users.js"></script>
+<script src="dynamic-bg.js"></script>
+</body></html>

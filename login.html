@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b1f3a">
+    <title>RAILKAVACH — Sign in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="login-styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<main class="auth-shell">
+    <section class="auth-visual" aria-label="RAILKAVACH overview">
+        <div class="visual-grid"></div>
+        <div class="visual-content">
+            <div class="brand">
+                <div class="brand-mark"><i class="fas fa-train"></i></div>
+                <span>RAIL<b>KAVACH</b></span>
+            </div>
+
+            <div class="visual-copy">
+                <span class="eyebrow"><i class="fas fa-shield-halved"></i> Railway Asset Intelligence</span>
+                <h1>Safer assets.<br><span>Smarter railways.</span></h1>
+                <p>Monitor railway components, identify issues early, and keep critical infrastructure moving safely.</p>
+            </div>
+
+            <div class="status-card">
+                <span class="status-dot"></span>
+                <div>
+                    <strong>Control system ready</strong>
+                    <small>Secure access &amp; real-time monitoring</small>
+                </div>
+                <i class="fas fa-arrow-up-right-from-square"></i>
+            </div>
+        </div>
+    </section>
+
+    <section class="auth-panel">
+        <div class="login-card">
+            <div class="mobile-brand">
+                <div class="brand-mark"><i class="fas fa-train"></i></div>
+                <span>RAIL<b>KAVACH</b></span>
+            </div>
+
+            <div class="login-heading">
+                <span class="welcome-label">WELCOME BACK</span>
+                <h2>Sign in to your account</h2>
+                <p>Use your registered email or continue with Google.</p>
+            </div>
+
+            <form id="login-form" novalidate>
+                <div class="form-group">
+                    <label for="email">Email address</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-envelope input-icon" aria-hidden="true"></i>
+                        <input id="email" type="email" autocomplete="email"
+                               placeholder="you@example.com" inputmode="email" required>
+                    </div>
+                    <div class="field-error" id="email-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <div class="label-row">
+                        <label for="password">Password</label>
+                        <span class="secure-hint"><i class="fas fa-lock"></i> Secure</span>
+                    </div>
+                    <div class="input-wrap password-wrap">
+                        <i class="fas fa-lock input-icon" aria-hidden="true"></i>
+                        <input id="password" type="password" autocomplete="current-password"
+                               placeholder="Enter your password" required>
+                        <button type="button" id="toggle-password" class="password-toggle"
+                                aria-label="Show password" aria-pressed="false">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="field-error" id="password-error"></div>
+                </div>
+
+                <button class="login-btn" id="login-btn" type="submit">
+                    <span class="btn-label">Sign in</span>
+                    <i class="fas fa-arrow-right btn-arrow" aria-hidden="true"></i>
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                </button>
+            </form>
+
+            <div class="divider"><span>OR</span></div>
+
+            <div class="google-login-section">
+                <div id="google-button"></div>
+            </div>
+
+            <div id="login-status" class="login-status" aria-live="polite"></div>
+
+            <div class="account-link">
+                <span>New to RAILKAVACH?</span>
+                <a href="register.html">Create an account <i class="fas fa-arrow-right"></i></a>
+            </div>
+
+            <div class="security-note">
+                <i class="fas fa-shield-halved"></i>
+                <span>Your credentials are protected with secure password hashing.</span>
+            </div>
+        </div>
+
+        <p class="copyright">© 2026 RAILKAVACH · Railway Asset Management</p>
+    </section>
+</main>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="google-config.js"></script>
+<script src="login.js"></script>
+<script src="dynamic-bg.js"></script>
+</body>
+</html>

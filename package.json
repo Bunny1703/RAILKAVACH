@@ -1,0 +1,19 @@
+{
+  "name": "railkavach-auth",
+  "version": "1.0.0",
+  "description": "RAILKAVACH with Supabase email/password and Google authentication",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "google-auth-library": "^10.3.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

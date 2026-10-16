@@ -265,8 +265,11 @@ async function loadRiskCenter({showSuccess=false}={}) {
 function openRiskAssetDetails(assetId, analytics){
     const row=(analytics?.risks||[]).find(r=>r.asset_id===assetId);
     if(!row)return;
+    const isMl = Boolean(row.ml_available || row.method === 'tree-ensemble-ml-with-safety-guardrail' || row.method === 'random-forest-ml');
+    const isFallback = Boolean(row.fallback_used || row.ml_unavailable_reason);
+    const methodText = isMl ? 'Tree Ensemble ML' : isFallback ? `Baseline Fallback (ML unavailable)` : 'Baseline Rule Engine';
     const modal=document.createElement('div'); modal.className='modal is-visible';
-    modal.innerHTML=`<div class="modal-content risk-detail-modal"><button class="close-modal" aria-label="Close">&times;</button><span class="eyebrow">LIVE RISK ASSESSMENT</span><h3>${escapeHtml(row.asset_id)}</h3><p>${escapeHtml(row.type||'Asset')} · ${escapeHtml(row.location||'—')}</p><div class="details-grid"><div><span>Risk level</span><strong>${escapeHtml(row.level)}</strong></div><div><span>Score</span><strong>${row.score==null?'—':escapeHtml(String(row.score))+'%'}</strong></div><div><span>Method</span><strong>${row.method==='random-forest-ml'?'Random Forest ML':'Baseline'}</strong></div><div><span>Inspections</span><strong>${Number(row.inspection_count||0)}</strong></div><div><span>Status</span><strong>${escapeHtml(row.status||'—')}</strong></div><div><span>Last inspection</span><strong>${escapeHtml(formatDate(row.latest_inspection))}</strong></div></div><div class="details-actions"><button class="btn btn-secondary" id="risk-detail-inspections">View Inspections</button><button class="btn btn-primary" id="risk-detail-close">Close</button></div></div>`;
+    modal.innerHTML=`<div class="modal-content risk-detail-modal"><button class="close-modal" aria-label="Close">&times;</button><span class="eyebrow">LIVE RISK ASSESSMENT</span><h3>${escapeHtml(row.asset_id)}</h3><p>${escapeHtml(row.type||'Asset')} · ${escapeHtml(row.location||'—')}</p><div class="details-grid"><div><span>Risk level</span><strong>${escapeHtml(row.level)}</strong></div><div><span>Score</span><strong>${row.score==null?'—':escapeHtml(String(row.score))+'%'}</strong></div><div><span>Method</span><strong title="${escapeHtml(row.ml_unavailable_reason || '')}">${escapeHtml(methodText)}</strong></div><div><span>Inspections</span><strong>${Number(row.inspection_count||0)}</strong></div><div><span>Status</span><strong>${escapeHtml(row.status||'—')}</strong></div><div><span>Last inspection</span><strong>${escapeHtml(formatDate(row.latest_inspection))}</strong></div></div>${isFallback && row.ml_unavailable_reason ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,0.08);border-left:3px solid var(--signal-amber,#f59e0b);border-radius:4px;font-size:11px;color:var(--text-muted,#64748b);"><strong>ML Fallback Reason:</strong> ${escapeHtml(row.ml_unavailable_reason)}</div>` : ''}<div class="details-actions"><button class="btn btn-secondary" id="risk-detail-inspections">View Inspections</button><button class="btn btn-primary" id="risk-detail-close">Close</button></div></div>`;
     document.body.appendChild(modal); const close=()=>modal.remove(); modal.querySelector('.close-modal').onclick=close; modal.querySelector('#risk-detail-close').onclick=close; modal.addEventListener('click',e=>{if(e.target===modal)close();});
     modal.querySelector('#risk-detail-inspections').onclick=()=>{close();document.querySelector('a[href="#inspections"]')?.click();document.getElementById('inspection-search')?.focus();};
 }
@@ -714,7 +717,7 @@ async function showAssetDetails(asset) {
             <div><span>Batch</span><strong>${escapeHtml(asset.batch_number || '—')}</strong></div>
             <div><span>Registered</span><strong>${escapeHtml(formatDate(asset.created_at))}</strong></div>
         </div>
-        <div class="asset-live-risk"><div><span class="eyebrow">CURRENT RISK</span><h4>${escapeHtml(riskLevel)} ${risk?.score == null ? '' : `· ${escapeHtml(String(risk.score))}%`}</h4></div><span class="status-badge ${riskClass}">${escapeHtml(risk?.method === 'random-forest-ml' ? 'ML' : risk ? 'Baseline' : 'Unavailable')}</span></div>
+        <div class="asset-live-risk"><div><span class="eyebrow">CURRENT RISK</span><h4>${escapeHtml(riskLevel)} ${risk?.score == null ? '' : `· ${escapeHtml(String(risk.score))}%`}</h4></div><span class="status-badge ${riskClass}">${escapeHtml((risk?.ml_available || risk?.method === 'tree-ensemble-ml-with-safety-guardrail' || risk?.method === 'random-forest-ml') ? 'ML' : (risk?.fallback_used || risk?.ml_unavailable_reason) ? 'Baseline (Fallback)' : risk ? 'Baseline' : 'Unavailable')}</span></div>
         <div class="inspection-history-panel"><div class="measurement-head"><span class="eyebrow">INSPECTION HISTORY</span><strong>${inspections.length} record${inspections.length === 1 ? '' : 's'}</strong></div>
             ${inspections.length ? `<div class="asset-inspection-history">${inspections.slice(0,8).map(item => { const c=item.status==='Passed'?'success':item.status==='Failed'?'danger':'warning'; return `<button class="asset-history-row" data-inspection-id="${escapeHtml(item.id)}"><span><strong>${escapeHtml(item.status || 'Pending')}</strong><small>${escapeHtml(formatDate(item.inspected_at || item.created_at))}</small></span><span class="status-badge ${c}">${escapeHtml(item.status || 'Pending')}</span></button>`; }).join('')}</div>` : '<div class="empty-state" style="padding:20px"><p>No inspections recorded yet.</p></div>'}
         </div>
@@ -1302,18 +1305,33 @@ function initInspectionTable(inspectionData = [], assetData = []) {
                 const dataUrl = await fileToDataUrl(file);
                 const result = await api('/api/yolo/predict', { method: 'POST', body: JSON.stringify({ image_base64: dataUrl, filename: file.name }) });
                 yoloResult = result;
+                if (result.model_is_railway_specific === false || result.demo_model) {
+                    throw new Error('This image was analyzed with a non-railway YOLO model. Railway defect prediction is blocked until a trained railway model is installed.');
+                }
                 const levels = result.condition_levels || {};
-                // Feed visual findings into the same 0-5 fields used by Random Forest.
+                // Feed only validated railway-model findings into the structured inspection fields.
                 [['crack_level','crack'],['corrosion_level','corrosion'],['deformation_level','deformation'],['wear_level','wear']].forEach(([inputId,key]) => {
                     if (levels[key] != null && Number(levels[key]) > 0) {
                         const input = modal.querySelector(`#inspection-${inputId.replace('_level','')}`);
                         if (input) { input.value = Math.max(Number(input.value), Number(levels[key])); input.dispatchEvent(new Event('input')); }
                     }
                 });
-                const risk = result.visual_risk_level || 'LOW';
-                const count = Number(result.count || 0);
-                yoloResultEl.innerHTML = `<div class="yolo-result-card"><strong>YOLO: ${escapeHtml(risk)}</strong><span>${count} defect${count === 1 ? '' : 's'} detected · ${escapeHtml(String(result.confidence ?? 0))}% max confidence</span>${count ? `<div class="yolo-detection-list">${result.detections.slice(0,8).map(d => `<span>${escapeHtml(d.class)} · ${Math.round(Number(d.confidence)*100)}%</span>`).join('')}</div>` : '<small>No supported defects detected.</small>'}</div>`;
-                showToast(`YOLO analysis complete: ${risk}`, risk === 'LOW' ? 'success' : 'warning', 3500);
+                const count = Number(result.count || (Array.isArray(result.detections) ? result.detections.length : 0));
+                let risk = String(result.visual_risk_level || '').toUpperCase().trim();
+                let note;
+                if (!count) {
+                    risk = 'INCONCLUSIVE';
+                    note = 'No defects detected above configured confidence threshold. Manual inspection required.';
+                } else if (risk === 'REVIEW_REQUIRED' || Number(result.confidence || 0) < 50 || risk === 'LOW' || !risk) {
+                    risk = (risk === 'HIGH' || risk === 'CRITICAL') ? risk : 'REVIEW REQUIRED';
+                    note = risk === 'REVIEW REQUIRED'
+                        ? 'Low-confidence defect detections require manual review.'
+                        : 'Defect evidence detected by railway-specific model.';
+                } else {
+                    note = 'Defect evidence detected by the railway-specific model.';
+                }
+                yoloResultEl.innerHTML = `<div class="yolo-result-card"><strong>Visual risk: ${escapeHtml(risk)}</strong><span>${escapeHtml(note)} · ${escapeHtml(String(result.confidence ?? 0))}% max confidence</span>${count ? `<div class="yolo-detection-list">${result.detections.slice(0,8).map(d => `<span>${escapeHtml(d.canonical_class || d.class)} · ${Math.round(Number(d.confidence)*100)}%</span>`).join('')}</div>` : '<small style="color:var(--signal-amber,#b45309);">No defects detected above threshold. Manual review required.</small>'}</div>`;
+                showToast(`YOLO analysis complete: ${risk}`, 'warning', 3500);
             } catch (error) { yoloResult = null; yoloResultEl.innerHTML = `<div class="yolo-error">${escapeHtml(error.message || 'YOLO analysis failed.')}</div>`; }
             finally { yoloAnalyze.disabled = false; yoloAnalyze.innerHTML = '<i class="fas fa-camera"></i> Analyze Image'; }
         });
@@ -1426,9 +1444,11 @@ function initInspectionTable(inspectionData = [], assetData = []) {
             const risk = riskMap[cell.dataset.riskAsset];
             if (!risk) { cell.innerHTML = '<span class="status-badge info">N/A</span>'; return; }
             const level = String(risk.level || 'PENDING').toUpperCase();
-            const cls = level === 'LOW' ? 'success' : level === 'MEDIUM' ? 'warning' : level === 'HIGH' || level === 'CRITICAL' ? 'danger' : 'info';
-            const method = risk.method === 'random-forest-ml' ? 'ML' : 'BASE';
-            cell.innerHTML = `<span class="status-badge ${cls}">${escapeHtml(level)}</span><small class="table-subtext">${escapeHtml(String(risk.score ?? '—'))}% · ${method}</small>`;
+            const isMl = Boolean(risk.ml_available || risk.method === 'tree-ensemble-ml-with-safety-guardrail' || risk.method === 'random-forest-ml');
+            const isFallback = Boolean(risk.fallback_used || risk.ml_unavailable_reason);
+            const method = isMl ? 'ML' : isFallback ? 'FALLBACK' : 'BASE';
+            const methodTitle = isMl ? 'ML Model (Tree Ensemble)' : isFallback ? `Baseline Fallback (ML unavailable: ${risk.ml_unavailable_reason || 'model error'})` : 'Baseline Rule Engine';
+            cell.innerHTML = `<span class="status-badge ${cls}">${escapeHtml(level)}</span><small class="table-subtext" title="${escapeHtml(methodTitle)}">${escapeHtml(String(risk.score ?? '—'))}% · ${escapeHtml(method)}</small>`;
         });
     }
 
@@ -1485,6 +1505,18 @@ function showInspectionDetails(inspection, asset) {
         <div class="measurement-readout-grid">
             ${[['Wear',inspection.wear_level],['Corrosion',inspection.corrosion_level],['Cracks',inspection.crack_level],['Deformation',inspection.deformation_level],['Vibration',inspection.vibration_level],['Temperature',inspection.temperature_c == null ? null : `${inspection.temperature_c} °C`],['Maintenance',inspection.maintenance_count],['Previous failures',inspection.previous_failures]].map(([label,value]) => `<div><span>${label}</span><strong>${escapeHtml(value ?? '—')}</strong></div>`).join('')}
         </div>
+        ${inspection.yolo_risk_level || (Array.isArray(inspection.yolo_detections) && inspection.yolo_detections.length) ? `
+        <div class="inspection-yolo-card" style="margin: 14px 0; padding: 12px 14px; background: rgba(37,99,235,0.04); border: 1px solid rgba(37,99,235,0.18); border-radius: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                <span class="eyebrow" style="color:var(--signal-blue,#2563eb); font-weight:700;"><i class="fas fa-camera"></i> AI Visual Evidence</span>
+                <span class="status-badge ${inspection.yolo_risk_level === 'CRITICAL' || inspection.yolo_risk_level === 'HIGH' ? 'danger' : 'warning'}">${escapeHtml(inspection.yolo_risk_level || 'INCONCLUSIVE')}</span>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 12px;">
+                <div><span>Image:</span> <strong>${escapeHtml(inspection.yolo_image_name || 'Attached')}</strong></div>
+                <div><span>Confidence:</span> <strong>${inspection.yolo_confidence != null ? escapeHtml(String(inspection.yolo_confidence)) + '%' : '—'}</strong></div>
+                <div><span>Detections:</span> <strong>${Array.isArray(inspection.yolo_detections) ? inspection.yolo_detections.length : 0}</strong></div>
+            </div>
+        </div>` : ''}
         <div class="inspection-note-box"><span>Notes</span><p>${escapeHtml(inspection.notes || 'No notes recorded.')}</p></div>
         <div class="details-actions"><button class="btn btn-secondary" id="inspection-detail-close">Close</button><button class="btn btn-secondary" id="inspection-detail-asset"><i class="fas fa-train"></i> Asset Details</button><button class="btn btn-primary" id="inspection-detail-edit"><i class="fas fa-edit"></i> Edit</button></div>
     </div>`;
@@ -1734,7 +1766,7 @@ function initScanner() {
 
                 <div class="scan-live-section">
                     <div class="scan-live-heading"><div><span class="eyebrow">CONDITION RISK</span><h4>${risk ? `${escapeHtml(riskLevel)} · ${escapeHtml(String(risk.score))}%` : 'Assessment unavailable'}</h4></div>${risk ? `<span class="status-badge ${riskClass}">${escapeHtml(riskLevel)}</span>` : ''}</div>
-                    <p class="scan-inspection-notes">${risk ? (risk.method === 'random-forest-ml' ? 'Live Random Forest prediction from the latest structured inspection data.' : 'Live baseline assessment from current asset status and inspection history. Train the local model to enable ML prediction.') : 'Risk assessment could not be loaded.'}</p>
+                    <p class="scan-inspection-notes">${risk ? ((risk.ml_available || risk.method === 'tree-ensemble-ml-with-safety-guardrail' || risk.method === 'random-forest-ml') ? 'Live Tree Ensemble ML prediction from the latest structured inspection data.' : (risk.fallback_used || risk.ml_unavailable_reason) ? `Live baseline assessment (ML fallback: ${escapeHtml(risk.ml_unavailable_reason || 'runtime error')}).` : 'Live baseline assessment from current asset status and inspection history.') : 'Risk assessment could not be loaded.'}</p>
                 </div>
                 <div class="scan-live-section">
                     <div class="scan-live-heading"><div><span class="eyebrow">LATEST INSPECTION</span><h4>${latestInspection ? escapeHtml(latestInspection.status || 'Pending') : 'Not inspected yet'}</h4></div>${latestInspection ? `<span class="status-badge ${inspectionClass}">${escapeHtml(latestInspection.status || 'Pending')}</span>` : ''}</div>
@@ -2094,14 +2126,128 @@ function initAiInspection() {
         r.readAsDataURL(f);
     });
     const renderResult = data => {
+        if (!data || typeof data !== 'object') {
+            setStatus('Failed', 'danger');
+            result.innerHTML = `<div class="ai-error"><i class="fas fa-triangle-exclamation"></i><div><strong>Invalid inspection response</strong><p>The vision model did not return a valid result payload.</p></div></div>`;
+            return;
+        }
+
         const detections = Array.isArray(data.detections) ? data.detections : [];
-        const risk = String(data.visual_risk_level || 'LOW').toUpperCase();
-        const cls = risk === 'CRITICAL' || risk === 'HIGH' ? 'danger' : risk === 'MEDIUM' ? 'warning' : 'success';
-        setStatus(risk, cls);
-        result.innerHTML = `<div class="ai-result-top"><div class="ai-risk-score"><span>Visual risk</span><strong>${escape(risk)}</strong><small>${Number(data.confidence || 0).toFixed(1)}% max confidence</small></div><div class="ai-result-kpi"><span>Detections</span><strong>${detections.length}</strong></div><div class="ai-result-kpi"><span>Model</span><strong>${escape(data.model || 'YOLO')}</strong></div></div><div class="ai-detection-heading"><h4>Detected objects</h4><span>${detections.length ? 'Review before recording an inspection' : 'No objects detected'}</span></div><div class="ai-detection-list">${detections.length ? detections.map((d,i) => `<div class="ai-detection-item"><span class="ai-detection-index">${i+1}</span><div><strong>${escape(d.class || 'Unknown')}</strong><small>Box: ${Array.isArray(d.bbox) ? d.bbox.map(v => Number(v).toFixed(0)).join(', ') : '—'}</small></div><span class="ai-confidence">${(Number(d.confidence || 0)*100).toFixed(1)}%</span></div>`).join('') : '<div class="ai-no-detection"><i class="fas fa-circle-check"></i><div><strong>No detections above threshold</strong><small>This does not prove the asset is defect-free.</small></div></div>'}</div><div class="ai-result-footer"><span><i class="fas fa-shield-halved"></i> Visual model result</span><button class="btn btn-secondary btn-sm" id="ai-open-inspection"><i class="fas fa-clipboard-check"></i> Record inspection</button></div>`;
-        document.getElementById('ai-open-inspection')?.addEventListener('click', () => { goToSection('inspections'); window.rkControllers.inspection?.openForm?.(); });
-        if (badge) { badge.textContent = data.demo_model ? 'Demo model' : 'Railway model'; badge.className = `ai-model-badge ${data.demo_model ? 'demo' : 'ready'}`; }
-        if (note) note.textContent = data.demo_model ? 'The bundled YOLO model is working for pipeline demonstration. Train a railway-specific model before using detections as production defect findings.' : 'Railway-specific YOLO model is active for this inspection.';
+        const count = detections.length;
+        const maxConf = Number(data.confidence || 0);
+
+        // Determine visual risk level with safe semantics.
+        // Never default missing risk to 'LOW'. Zero detections is INCONCLUSIVE.
+        let rawRisk = String(data.visual_risk_level || '').toUpperCase().trim();
+        let risk;
+        let riskLabel;
+        let cls;
+        let riskSubtitle;
+
+        if (count === 0) {
+            risk = 'INCONCLUSIVE';
+            riskLabel = 'INCONCLUSIVE';
+            cls = 'warning';
+            riskSubtitle = 'Manual review required (0 defects detected)';
+        } else {
+            // Check for low-confidence detections (all detections or max confidence < 50%)
+            const hasStrong = detections.some(d => Number(d.confidence || 0) >= 0.50);
+            if (!hasStrong || rawRisk === 'REVIEW_REQUIRED' || rawRisk === 'UNCERTAIN') {
+                risk = 'REVIEW_REQUIRED';
+                riskLabel = 'REVIEW REQUIRED';
+                cls = 'warning';
+                riskSubtitle = `${maxConf.toFixed(1)}% max confidence (low-confidence prediction)`;
+            } else if (rawRisk === 'CRITICAL') {
+                risk = 'CRITICAL';
+                riskLabel = 'CRITICAL';
+                cls = 'danger';
+                riskSubtitle = `${maxConf.toFixed(1)}% max confidence (severe defect)`;
+            } else if (rawRisk === 'HIGH') {
+                risk = 'HIGH';
+                riskLabel = 'HIGH';
+                cls = 'danger';
+                riskSubtitle = `${maxConf.toFixed(1)}% max confidence (defect evidence)`;
+            } else {
+                risk = (rawRisk === 'LOW' || !rawRisk) ? 'MEDIUM' : rawRisk;
+                riskLabel = risk;
+                cls = 'warning';
+                riskSubtitle = `${maxConf.toFixed(1)}% max confidence`;
+            }
+        }
+
+        setStatus(riskLabel, cls);
+
+        const headingNote = count === 0
+            ? 'No defects detected above threshold'
+            : (cls === 'danger'
+                ? 'High-priority defect evidence — verify in field'
+                : 'Review detected objects before recording inspection');
+
+        const detectionItemsHtml = count > 0
+            ? detections.map((d, i) => {
+                const confVal = Number(d.confidence || 0);
+                const confPct = (confVal * 100).toFixed(1);
+                const isLow = confVal < 0.50;
+                const className = escape(d.canonical_class || d.class || 'Unknown defect');
+                const boxStr = Array.isArray(d.bbox) ? d.bbox.map(v => Number(v).toFixed(0)).join(', ') : '—';
+                return `<div class="ai-detection-item ${isLow ? 'low-conf' : ''}">
+                    <span class="ai-detection-index">${i + 1}</span>
+                    <div>
+                        <strong>${className}</strong>
+                        <small>Box: ${boxStr}${isLow ? ' · <span style="color:var(--signal-amber,#b45309);font-weight:600;">Low confidence</span>' : ''}</small>
+                    </div>
+                    <span class="ai-confidence ${isLow ? 'warning' : ''}">${confPct}%</span>
+                </div>`;
+            }).join('')
+            : `<div class="ai-no-detection warning">
+                <i class="fas fa-triangle-exclamation" style="color: var(--signal-amber, #f59e0b);"></i>
+                <div>
+                    <strong>No defects detected above configured confidence threshold</strong>
+                    <small>This does not confirm that the asset is defect-free. Manual inspection is required.</small>
+                </div>
+            </div>`;
+
+        result.innerHTML = `
+            <div class="ai-result-top">
+                <div class="ai-risk-score ${cls}">
+                    <span>Visual risk</span>
+                    <strong>${escape(riskLabel)}</strong>
+                    <small>${escape(riskSubtitle)}</small>
+                </div>
+                <div class="ai-result-kpi">
+                    <span>Detections</span>
+                    <strong>${count}</strong>
+                </div>
+                <div class="ai-result-kpi">
+                    <span>Model</span>
+                    <strong>${escape(data.model || 'YOLO')}</strong>
+                </div>
+            </div>
+            <div class="ai-detection-heading">
+                <h4>Detected objects</h4>
+                <span>${escape(headingNote)}</span>
+            </div>
+            <div class="ai-detection-list">${detectionItemsHtml}</div>
+            <div class="ai-result-footer">
+                <span><i class="fas fa-shield-halved"></i> Advisory visual AI · Requires engineering confirmation</span>
+                <button class="btn btn-secondary btn-sm" id="ai-open-inspection"><i class="fas fa-clipboard-check"></i> Record inspection</button>
+            </div>
+        `;
+
+        document.getElementById('ai-open-inspection')?.addEventListener('click', () => {
+            goToSection('inspections');
+            window.rkControllers.inspection?.openForm?.();
+        });
+
+        if (badge) {
+            badge.textContent = data.demo_model ? 'Demo model' : 'Railway model';
+            badge.className = `ai-model-badge ${data.demo_model ? 'demo' : 'ready'}`;
+        }
+        if (note) {
+            note.textContent = data.demo_model
+                ? 'The bundled YOLO model is working for pipeline demonstration. Train a railway-specific model before using detections as production defect findings.'
+                : 'Railway-specific YOLO model is active for this inspection.';
+        }
     };
     analyze.addEventListener('click', async () => {
         if (!file || analysisBusy) return;
@@ -2183,7 +2329,7 @@ function initAiReport() {
         const failed = rows.filter(r => r.inspection_status === 'Failed').length;
         const pending = rows.filter(r => r.inspection_status === 'Pending').length;
         const maintenance = rows.filter(r => r.asset_status === 'Maintenance').length;
-        const ml = rows.filter(r => r.method === 'random-forest-ml').length;
+        const ml = rows.filter(r => r.ml_available || r.method === 'tree-ensemble-ml-with-safety-guardrail' || r.method === 'random-forest-ml').length;
         const period = escape(meta.periodLabel);
         container.innerHTML = `
             <div class="report-print-area" id="report-print-area">
@@ -2199,7 +2345,7 @@ function initAiReport() {
                 <div class="chart-container report-chart"><canvas id="reportChart"></canvas></div>
                 <h4>Asset Risk & Inspection Summary</h4>
                 <div class="table-responsive"><table class="data-table report-table"><thead><tr><th>Asset</th><th>Component</th><th>Location</th><th>Status</th><th>Inspection</th><th>Risk</th><th>Score</th><th>Method</th></tr></thead><tbody>
-                ${rows.length ? rows.map(r => `<tr><td><strong>${escape(r.asset_id)}</strong></td><td>${escape(r.type)}</td><td>${escape(r.location)}</td><td>${escape(r.asset_status)}</td><td>${escape(r.inspection_status)}</td><td><span class="status-badge ${r.risk==='CRITICAL'||r.risk==='HIGH'?'danger':r.risk==='MEDIUM'?'warning':'success'}">${escape(r.risk)}</span></td><td>${r.score == null ? '—' : escape(String(r.score))+'%'}</td><td>${escape(r.method === 'random-forest-ml' ? 'Random Forest' : 'Baseline')}</td></tr>`).join('') : '<tr><td colspan="8"><div class="empty-state"><p>No matching report records.</p></div></td></tr>'}
+                ${rows.length ? rows.map(r => `<tr><td><strong>${escape(r.asset_id)}</strong></td><td>${escape(r.type)}</td><td>${escape(r.location)}</td><td>${escape(r.asset_status)}</td><td>${escape(r.inspection_status)}</td><td><span class="status-badge ${r.risk==='CRITICAL'||r.risk==='HIGH'?'danger':r.risk==='MEDIUM'?'warning':'success'}">${escape(r.risk)}</span></td><td>${r.score == null ? '—' : escape(String(r.score))+'%'}</td><td>${escape((r.ml_available || r.method === 'tree-ensemble-ml-with-safety-guardrail' || r.method === 'random-forest-ml') ? 'Ensemble ML' : (r.fallback_used || r.ml_unavailable_reason) ? 'Baseline (Fallback)' : 'Baseline')}</td></tr>`).join('') : '<tr><td colspan="8"><div class="empty-state"><p>No matching report records.</p></div></td></tr>'}
                 </tbody></table></div>
                 <div class="report-findings"><h4>Findings</h4><ul><li>${counts.CRITICAL ? `${counts.CRITICAL} critical asset(s) need immediate review.` : 'No critical assets in this report.'}</li><li>${counts.HIGH ? `${counts.HIGH} high-risk asset(s) should be prioritized.` : 'No high-risk assets in this report.'}</li><li>${failed ? `${failed} failed inspection(s) require follow-up.` : 'No failed inspections in this report.'}</li><li>${pending ? `${pending} inspection(s) are pending.` : 'No pending inspections in this report.'}</li></ul></div>
             </div>`;
@@ -2228,7 +2374,7 @@ function initAiReport() {
             inspections.filter(i => !start || new Date(i.inspected_at || i.created_at || 0) >= start).sort((a,b)=>new Date(b.inspected_at||b.created_at||0)-new Date(a.inspected_at||a.created_at||0)).forEach(i => { if (!latestByAsset.has(String(i.asset_id))) latestByAsset.set(String(i.asset_id), i); });
             const riskResults = await Promise.all(selectedAssets.map(async a => { try { const x=await api(`/api/risk?asset_id=${encodeURIComponent(a.id)}`); return [String(a.id), x.risk]; } catch { return [String(a.id), null]; } }));
             const riskMap = new Map(riskResults);
-            let rows = selectedAssets.map(a => { const i=latestByAsset.get(String(a.id)); const r=riskMap.get(String(a.id)); return {asset_id:a.id,type:a.type||'Asset',location:a.location||'—',asset_status:a.status||'Unknown',inspection_status:i?.status||'Not inspected',risk:String(r?.level||'PENDING').toUpperCase(),score:r?.score ?? null,method:r?.method||'baseline',inspected_at:i?.inspected_at||i?.created_at||null}; });
+            let rows = selectedAssets.map(a => { const i=latestByAsset.get(String(a.id)); const r=riskMap.get(String(a.id)); return {asset_id:a.id,type:a.type||'Asset',location:a.location||'—',asset_status:a.status||'Unknown',inspection_status:i?.status||'Not inspected',risk:String(r?.level||'PENDING').toUpperCase(),score:r?.score ?? null,method:r?.method||'baseline-rule-engine',ml_available:Boolean(r?.ml_available),fallback_used:Boolean(r?.fallback_used),ml_unavailable_reason:r?.ml_unavailable_reason||null,inspected_at:i?.inspected_at||i?.created_at||null}; });
             const rf = riskFilter?.value || '';
             if (rf) rows = rows.filter(r => r.risk === rf);
             const periodLabel = {'1month':'last month','3months':'last 3 months','6months':'last 6 months','1year':'last year'}[timePeriod] || timePeriod;

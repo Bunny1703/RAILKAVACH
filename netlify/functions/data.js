@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { getPythonBin } = require('./_python');
 const execFileAsync = promisify(execFile);
 
 const ALLOWED_ASSET_STATUS = ['Active', 'Maintenance', 'Inactive'];
@@ -57,16 +58,6 @@ async function writeNotification(type, icon, text, entityId = null) {
 
 const ML_MODEL_PATH = path.join(__dirname, '..', '..', 'ml', 'model', 'risk_model.pkl');
 const ML_PREDICT_PATH = path.join(__dirname, '..', '..', 'ml', 'predict.py');
-
-const VENV_PYTHON = process.platform === 'win32'
-  ? path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe')
-  : path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
-
-function getPythonBin() {
-  if (process.env.PYTHON_BIN && fs.existsSync(process.env.PYTHON_BIN)) return process.env.PYTHON_BIN;
-  if (fs.existsSync(VENV_PYTHON)) return VENV_PYTHON;
-  return process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
-}
 
 function numeric(value, fallback = 0) {
   const n = Number(value);

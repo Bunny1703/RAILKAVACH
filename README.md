@@ -34,6 +34,16 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Deploy on Render
+
+`render.yaml` installs the Python dependencies into `.venv` during the build and starts the Node.js server. If configuring an existing Render service manually, use this build command:
+
+```bash
+npm install && python3 -m venv .venv && .venv/bin/python -m pip install -r ml/requirements.txt
+```
+
+Set the start command to `npm start`. The server automatically uses `.venv/bin/python` for risk and YOLO predictions.
+
 ## Project structure
 
 - `index.html` — dashboard UI

@@ -21,7 +21,7 @@ Browser → Express → Netlify-style function → Python YOLO → JSON result
 
 ## ML status
 
-`ml/model/railway_defect_yolo.pt` is the intended railway-specific model. If it is not present, local development falls back to the bundled `yolo11n.pt` demo model. A general YOLO model must not be presented as a trained railway-defect detector.
+`ml/model/railway_surface_classifier.pt or ml/model/railway_defect_yolo.pt` is the intended railway-specific model. If it is not present, local development falls back to the bundled `yolo11n.pt` demo model. A general YOLO model must not be presented as a trained railway-defect detector.
 
 ## Run locally
 

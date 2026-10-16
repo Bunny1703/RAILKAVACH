@@ -1,0 +1,20 @@
+RAILKAVACH — macOS quick start
+
+1. Extract this ZIP.
+2. Open the extracted RAILKAVACH folder.
+3. Double-click run-mac.command.
+   If macOS blocks it: right-click the file > Open, then confirm. Or open Terminal,
+   type: cd 
+   drag the RAILKAVACH folder into Terminal, press Enter, then run:
+   chmod +x run-mac.command
+   ./run-mac.command
+4. The script checks Node.js, creates .env from .env.example if missing,
+   installs npm dependencies (including dotenv), checks server syntax, and starts the app.
+5. Open http://localhost:3000. Keep the Terminal window open.
+6. Edit .env with your own credentials to enable Supabase-backed login and data features.
+
+Important:
+- Never share or upload your populated .env file.
+- A server that starts without credentials does not mean login/database features work.
+- AI prediction also requires the relevant Python dependencies/model setup.
+- Stop the server with Control+C in the Terminal window.

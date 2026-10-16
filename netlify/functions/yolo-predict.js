@@ -5,13 +5,9 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { response, getBody, authenticatedUser } = require('./_auth');
 const { requirePermission } = require('./_security');
+const { getPythonBin } = require('./_python');
 
-const VENV_PYTHON = process.platform === 'win32'
-  ? path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe')
-  : path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
-
-const PYTHON = process.env.PYTHON_BIN ||
-  (fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : (process.platform === 'win32' ? 'python' : 'python3'));
+const PYTHON = getPythonBin();
 const DEFAULT_CLASSIFIER_MODEL = path.join(__dirname, '..', '..', 'ml', 'model', 'railway_surface_classifier.pt');
 const DEFAULT_DETECTOR_MODEL = path.join(__dirname, '..', '..', 'ml', 'model', 'railway_defect_yolo.pt');
 const RAILWAY_MODEL = path.resolve(

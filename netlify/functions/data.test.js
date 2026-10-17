@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { summarizeMlSubprocessFailure } = require('./data');
+const { summarizeMlSubprocessFailure, predictWithMl } = require('./data');
 
 test('summarizes ML subprocess failures with exit code and captured output', () => {
   const result = summarizeMlSubprocessFailure(
@@ -41,4 +41,25 @@ test('captures timeout kills from the Python ML subprocess', () => {
   assert.equal(result.killed, true);
   assert.equal(result.exit_code, null);
   assert.match(result.error_message, /timed out/);
+});
+
+test('uses the Render-safe rule engine fallback instead of invoking Python', async () => {
+  process.env.RENDER = 'true';
+  const result = await predictWithMl({
+    asset_age_years: 0.2,
+    wear_level: 3,
+    corrosion_level: 2,
+    crack_level: 1,
+    deformation_level: 2,
+    vibration_level: 2,
+    temperature_c: 32,
+    maintenance_count: 1,
+    previous_failures: 0,
+    days_since_last_inspection: 60
+  });
+
+  assert.equal(result.method, 'render-rule-engine');
+  assert.equal(result.__mlUnavailable, true);
+  assert.match(result.risk_level, /LOW|MEDIUM|HIGH|CRITICAL/);
+  delete process.env.RENDER;
 });

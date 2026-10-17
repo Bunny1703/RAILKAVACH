@@ -78,6 +78,53 @@ function daysSinceInspection(inspection) {
   return Math.max(0, Number(((Date.now() - stamp) / 86400000).toFixed(2)));
 }
 
+function ruleEngineRisk(features) {
+  const age = numeric(features?.asset_age_years, 0);
+  const days = numeric(features?.days_since_last_inspection, 365);
+  const wear = numeric(features?.wear_level, 0);
+  const corrosion = numeric(features?.corrosion_level, 0);
+  const crack = numeric(features?.crack_level, 0);
+  const deformation = numeric(features?.deformation_level, 0);
+  const vibration = numeric(features?.vibration_level, 0);
+  const temp = numeric(features?.temperature_c, 25);
+  const maintenance = numeric(features?.maintenance_count, 0);
+  const previousFailures = numeric(features?.previous_failures, 0);
+
+  let score = 0;
+  score += Math.min(20, age * 10);
+  score += Math.min(20, wear * 4);
+  score += Math.min(20, corrosion * 5);
+  score += Math.min(20, crack * 6);
+  score += Math.min(20, deformation * 6);
+  score += Math.min(20, vibration * 5);
+  score += Math.min(10, maintenance * 3);
+  score += Math.min(15, previousFailures * 8);
+
+  if (days > 180) score += 15;
+  else if (days > 90) score += 8;
+  if (temp < 0 || temp > 55) score += 10;
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const level = score >= 75 ? 'CRITICAL' : score >= 50 ? 'HIGH' : score >= 25 ? 'MEDIUM' : 'LOW';
+
+  return {
+    risk_level: level,
+    risk_score: score,
+    confidence: 0.64,
+    probabilities: {
+      LOW: level === 'LOW' ? 60 : 15,
+      MEDIUM: level === 'MEDIUM' ? 60 : 25,
+      HIGH: level === 'HIGH' ? 60 : 20,
+      CRITICAL: level === 'CRITICAL' ? 60 : 15
+    },
+    method: 'render-rule-engine',
+    ml_available: false,
+    __mlUnavailable: true,
+    fallback_used: true,
+    reason: 'Render production uses the built-in rule-engine because the Python ML subprocess is not reliable in this environment.'
+  };
+}
+
 function mlFeatures(asset, latest) {
   return {
     asset_age_years: assetAgeYears(asset),
@@ -119,6 +166,11 @@ function summarizeMlSubprocessFailure(error, python, modelPath) {
 }
 
 async function predictWithMl(features) {
+  const isRenderRuntime = String(process.env.RENDER || '').toLowerCase() === 'true';
+  if (isRenderRuntime) {
+    return ruleEngineRisk(features);
+  }
+
   if (!fs.existsSync(ML_MODEL_PATH) || !fs.existsSync(ML_PREDICT_PATH)) {
     return { __mlUnavailable: true, reason: 'ML model files are missing on disk.' };
   }
@@ -212,6 +264,8 @@ function pathForPermission(value) {
 }
 
 exports.summarizeMlSubprocessFailure = summarizeMlSubprocessFailure;
+exports.predictWithMl = predictWithMl;
+exports.ruleEngineRisk = ruleEngineRisk;
 
 exports.handler = async (event) => {
   try {

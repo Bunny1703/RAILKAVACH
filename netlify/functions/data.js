@@ -58,6 +58,7 @@ async function writeNotification(type, icon, text, entityId = null) {
 
 const ML_MODEL_PATH = path.join(__dirname, '..', '..', 'ml', 'model', 'risk_model.pkl');
 const ML_PREDICT_PATH = path.join(__dirname, '..', '..', 'ml', 'predict.py');
+const ML_SUBPROCESS_TIMEOUT_MS = 60000;
 
 function numeric(value, fallback = 0) {
   const n = Number(value);
@@ -92,17 +93,54 @@ function mlFeatures(asset, latest) {
   };
 }
 
+function truncateLogChunk(value, maxLength = 600) {
+  if (value === undefined || value === null) return '';
+  const text = String(value).replace(/\r\n/g, '\n').trim();
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trim()}...`;
+}
+
+function summarizeMlSubprocessFailure(error, python, modelPath) {
+  const stdout = truncateLogChunk(error?.stdout);
+  const stderr = truncateLogChunk(error?.stderr);
+  const exitCode = Number.isInteger(error?.code) ? error.code : (Number.isInteger(error?.status) ? error.status : null);
+  return {
+    python_bin: python,
+    model_path: modelPath,
+    exit_code: exitCode,
+    signal: error?.signal ?? null,
+    killed: error?.killed ?? null,
+    timed_out: error?.timedOut ?? null,
+    error_message: error?.message || 'Command failed',
+    stdout,
+    stderr,
+  };
+}
+
 async function predictWithMl(features) {
   if (!fs.existsSync(ML_MODEL_PATH) || !fs.existsSync(ML_PREDICT_PATH)) {
     return { __mlUnavailable: true, reason: 'ML model files are missing on disk.' };
   }
   const python = getPythonBin();
+  if (!python || !fs.existsSync(python)) {
+    return {
+      __mlUnavailable: true,
+      reason: `Configured Python binary does not exist on disk: ${python || 'not set'}`,
+      python_bin: python || null,
+    };
+  }
   try {
     const { stdout, stderr } = await execFileAsync(python, [
       ML_PREDICT_PATH,
       '--model', ML_MODEL_PATH,
       '--json', JSON.stringify(features)
-    ], { timeout: 12000, windowsHide: true, maxBuffer: 1024 * 1024 });
+    ], {
+      timeout: ML_SUBPROCESS_TIMEOUT_MS,
+      windowsHide: true,
+      maxBuffer: 1024 * 1024,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
+    });
 
     const trimmed = String(stdout || '').trim();
     if (!trimmed) {
@@ -122,22 +160,24 @@ async function predictWithMl(features) {
       python_bin: python
     };
   } catch (error) {
-    const stderr = String(error.stderr || '').trim();
-    const stdout = String(error.stdout || '').trim();
-    const detail = [error.message, stderr, stdout].filter(Boolean).join(' | ');
-    console.error('ML prediction subprocess failed:', {
-      python_bin: python,
-      model_path: ML_MODEL_PATH,
-      error_message: error.message || null,
-      stderr: stderr || null,
-      stdout: stdout || null
-    });
-    console.warn('ML prediction unavailable; using baseline risk fallback:', detail);
+    const summary = summarizeMlSubprocessFailure(error, python, ML_MODEL_PATH);
+    const detail = [
+      summary.error_message,
+      summary.exit_code != null ? `exit_code=${summary.exit_code}` : null,
+      summary.signal ? `signal=${summary.signal}` : null,
+      summary.killed ? 'killed=true' : null,
+      summary.timed_out ? 'timed_out=true' : null,
+      summary.stderr ? `stderr=${summary.stderr}` : null,
+      summary.stdout ? `stdout=${summary.stdout}` : null
+    ].filter(Boolean).join(' | ');
+    console.error('ML prediction subprocess failed:', summary);
+    console.warn('ML prediction unavailable; using baseline risk fallback:', detail || 'Command failed');
     return {
       __mlUnavailable: true,
       reason: detail || 'Python ML prediction failed.',
       python_bin: python,
-      error_detail: stderr || stdout || error.message
+      error_detail: summary.stderr || summary.stdout || summary.error_message,
+      exit_code: summary.exit_code
     };
   }
 }
@@ -170,6 +210,8 @@ function pathForPermission(value) {
   const known = ['assets', 'inventory', 'inspections', 'notifications', 'audit-logs', 'users'];
   return known.find(name => text.endsWith('/' + name)) || text;
 }
+
+exports.summarizeMlSubprocessFailure = summarizeMlSubprocessFailure;
 
 exports.handler = async (event) => {
   try {

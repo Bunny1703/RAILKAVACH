@@ -122,13 +122,22 @@ async function predictWithMl(features) {
       python_bin: python
     };
   } catch (error) {
-    const detail = [error.message, error.stderr, error.stdout].filter(Boolean).join(' | ');
+    const stderr = String(error.stderr || '').trim();
+    const stdout = String(error.stdout || '').trim();
+    const detail = [error.message, stderr, stdout].filter(Boolean).join(' | ');
+    console.error('ML prediction subprocess failed:', {
+      python_bin: python,
+      model_path: ML_MODEL_PATH,
+      error_message: error.message || null,
+      stderr: stderr || null,
+      stdout: stdout || null
+    });
     console.warn('ML prediction unavailable; using baseline risk fallback:', detail);
     return {
       __mlUnavailable: true,
       reason: detail || 'Python ML prediction failed.',
       python_bin: python,
-      error_detail: error.stderr || error.message
+      error_detail: stderr || stdout || error.message
     };
   }
 }

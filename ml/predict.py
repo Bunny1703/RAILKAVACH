@@ -51,6 +51,11 @@ def main():
     except Exception as err:
         sys.stderr.write(f"ERROR: Failed to unpickle risk model bundle '{model_path}' in Python '{sys.executable}': {err}\n")
         traceback.print_exc(file=sys.stderr)
+        if "_loss" in str(err) or "InconsistentVersionWarning" in str(err):
+            sys.stderr.write(
+                "Hint: This model was serialized with a specific scikit-learn version. "
+                "Install the compatible version from ml/requirements.txt before running the predictor.\n"
+            )
         sys.exit(3)
 
     features = list(bundle.get('features', []))

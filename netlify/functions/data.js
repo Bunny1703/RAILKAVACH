@@ -2,7 +2,7 @@ const { response, getBody, authenticatedUser, supabaseRequest } = require('./_au
 const { requirePermission, validateText } = require('./_security');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const { getPythonBin } = require('./_python');
 const execFileAsync = promisify(execFile);
@@ -59,6 +59,28 @@ async function writeNotification(type, icon, text, entityId = null) {
 const ML_MODEL_PATH = path.join(__dirname, '..', '..', 'ml', 'model', 'risk_model.pkl');
 const ML_PREDICT_PATH = path.join(__dirname, '..', '..', 'ml', 'predict.py');
 const ML_SUBPROCESS_TIMEOUT_MS = 60000;
+const ML_SUBPROCESS_TERMINATION_GRACE_MS = 1000;
+const ML_SUBPROCESS_KILL_GRACE_MS = 1000;
+const ML_SUBPROCESS_MAX_CONCURRENCY = 2;
+const ML_SUBPROCESS_MAX_OUTPUT_BYTES = 1024 * 1024;
+let activeMlSubprocesses = 0;
+const mlSubprocessQueue = [];
+
+async function withMlSubprocessSlot(operation) {
+  if (activeMlSubprocesses >= ML_SUBPROCESS_MAX_CONCURRENCY) {
+    await new Promise(resolve => mlSubprocessQueue.push(resolve));
+  } else {
+    activeMlSubprocesses += 1;
+  }
+
+  try {
+    return await operation();
+  } finally {
+    const next = mlSubprocessQueue.shift();
+    if (next) next();
+    else activeMlSubprocesses -= 1;
+  }
+}
 
 function numeric(value, fallback = 0) {
   const n = Number(value);
@@ -110,18 +132,12 @@ function ruleEngineRisk(features) {
   return {
     risk_level: level,
     risk_score: score,
-    confidence: 0.64,
-    probabilities: {
-      LOW: level === 'LOW' ? 60 : 15,
-      MEDIUM: level === 'MEDIUM' ? 60 : 25,
-      HIGH: level === 'HIGH' ? 60 : 20,
-      CRITICAL: level === 'CRITICAL' ? 60 : 15
-    },
+    confidence: null,
     method: 'render-rule-engine',
     ml_available: false,
     __mlUnavailable: true,
     fallback_used: true,
-    reason: 'Render production uses the built-in rule-engine because the Python ML subprocess is not reliable in this environment.'
+    reason: 'Rule-based fallback used because ML prediction is unavailable.'
   };
 }
 
@@ -140,63 +156,176 @@ function mlFeatures(asset, latest) {
   };
 }
 
-function truncateLogChunk(value, maxLength = 600) {
-  if (value === undefined || value === null) return '';
-  const text = String(value).replace(/\r\n/g, '\n').trim();
-  if (!text) return '';
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength - 3).trim()}...`;
+function runMlSubprocess(command, args, endpoint, {
+  spawnProcess = spawn,
+  timeoutMs = ML_SUBPROCESS_TIMEOUT_MS,
+  terminationGraceMs = ML_SUBPROCESS_TERMINATION_GRACE_MS,
+  killGraceMs = ML_SUBPROCESS_KILL_GRACE_MS
+} = {}) {
+  return withMlSubprocessSlot(() => new Promise(resolve => {
+    const startedAt = Date.now();
+    let child;
+    let stdout = '';
+    let outputBytes = 0;
+    let timedOut = false;
+    let processExited = false;
+    let outputLimitExceeded = false;
+    let spawnFailed = false;
+    let settled = false;
+    let timeout;
+    let forceKillTimeout;
+    let killGraceTimeout;
+    let closeTimeout;
+
+    const clearTimers = () => {
+      clearTimeout(timeout);
+      clearTimeout(forceKillTimeout);
+      clearTimeout(killGraceTimeout);
+      clearTimeout(closeTimeout);
+    };
+
+    const finish = (exitCode, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      let outcome = 'normal';
+      if (timedOut) outcome = 'timed_out';
+      else if (outputLimitExceeded) outcome = 'failed';
+      else if (signal) outcome = 'terminated';
+      else if (spawnFailed || exitCode !== 0) outcome = 'failed';
+      resolve({
+        stdout,
+        elapsed_ms: Date.now() - startedAt,
+        outcome,
+        exit_code: Number.isInteger(exitCode) ? exitCode : null,
+        signal: signal || null
+      });
+    };
+
+    const sendSignal = signal => {
+      try {
+        child.kill(signal);
+      } catch (_) {
+        spawnFailed = true;
+      }
+    };
+
+    const terminate = reason => {
+      if (settled || forceKillTimeout) return;
+      if (reason === 'timeout') timedOut = true;
+      if (reason === 'output_limit') outputLimitExceeded = true;
+      clearTimeout(timeout);
+      forceKillTimeout = setTimeout(() => {
+        killGraceTimeout = setTimeout(() => finish(null, null), killGraceMs);
+        sendSignal('SIGKILL');
+      }, terminationGraceMs);
+      sendSignal('SIGTERM');
+    };
+
+    try {
+      child = spawnProcess(command, args, {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+        env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
+      });
+    } catch (_) {
+      spawnFailed = true;
+      finish(null, null);
+      return;
+    }
+
+    child.stdout.on('data', chunk => {
+      outputBytes += Buffer.byteLength(chunk);
+      if (outputBytes > ML_SUBPROCESS_MAX_OUTPUT_BYTES) {
+        terminate('output_limit');
+        return;
+      }
+      stdout += chunk.toString();
+    });
+    child.on('error', () => { spawnFailed = true; });
+    child.once('exit', (exitCode, signal) => {
+      processExited = true;
+      clearTimeout(timeout);
+      clearTimeout(forceKillTimeout);
+      if (timedOut || outputLimitExceeded || signal || spawnFailed || exitCode !== 0) {
+        finish(exitCode, signal);
+        return;
+      }
+      closeTimeout = setTimeout(() => finish(null, null), killGraceMs);
+    });
+    child.on('close', finish);
+
+    timeout = setTimeout(() => {
+      if (processExited) return;
+      terminate('timeout');
+    }, timeoutMs);
+  }));
 }
 
-function summarizeMlSubprocessFailure(error, python, modelPath) {
-  const stdout = truncateLogChunk(error?.stdout);
-  const stderr = truncateLogChunk(error?.stderr);
-  const exitCode = Number.isInteger(error?.code) ? error.code : (Number.isInteger(error?.status) ? error.status : null);
-  return {
-    python_bin: python,
-    model_path: modelPath,
-    exit_code: exitCode,
-    signal: error?.signal ?? null,
-    killed: error?.killed ?? null,
-    timed_out: error?.timedOut ?? null,
-    error_message: error?.message || 'Command failed',
-    stdout,
-    stderr,
-  };
+function logMlSubprocessDiagnostic(endpoint, result) {
+  console.info('ML prediction subprocess:', JSON.stringify({
+    endpoint,
+    elapsed_ms: result.elapsed_ms,
+    outcome: result.outcome,
+    exit_code: result.exit_code,
+    signal: result.signal
+  }));
 }
 
-async function predictWithMl(features) {
+async function predictWithMl(features, endpoint = '/api/risk', executeSubprocess = runMlSubprocess) {
   if (!fs.existsSync(ML_MODEL_PATH) || !fs.existsSync(ML_PREDICT_PATH)) {
-    return { __mlUnavailable: true, reason: 'ML model files are missing on disk.' };
+    return { __mlUnavailable: true, reason: 'ML model files are unavailable; baseline rule engine used.' };
   }
   const python = getPythonBin();
   if (!python || !fs.existsSync(python)) {
     return {
       __mlUnavailable: true,
-      reason: `Configured Python binary does not exist on disk: ${python || 'not set'}`,
-      python_bin: python || null,
+      reason: 'Python runtime is unavailable; baseline rule engine used.'
     };
   }
+
+  let subprocess;
+  let parsed;
   try {
-    const { stdout, stderr } = await execFileAsync(python, [
+    subprocess = await executeSubprocess(python, [
       ML_PREDICT_PATH,
       '--model', ML_MODEL_PATH,
       '--json', JSON.stringify(features)
-    ], {
-      timeout: ML_SUBPROCESS_TIMEOUT_MS,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024,
-      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
-    });
+    ], endpoint);
+  } catch (_) {
+    subprocess = {
+      elapsed_ms: 0,
+      outcome: 'failed',
+      exit_code: null,
+      signal: null
+    };
+  }
 
-    const trimmed = String(stdout || '').trim();
-    if (!trimmed) {
-      throw new Error(`Empty prediction response from python process. Stderr: ${stderr || 'None'}`);
+  if (subprocess.outcome === 'normal') {
+    try {
+      parsed = JSON.parse(String(subprocess.stdout || '').trim());
+      if (!parsed?.risk_level) subprocess.outcome = 'failed';
+    } catch (_) {
+      subprocess.outcome = 'failed';
     }
-    const parsed = JSON.parse(trimmed);
-    if (!parsed?.risk_level) {
-      throw new Error(`ML model output did not contain risk_level. Output: ${trimmed.slice(0, 200)}`);
-    }
+  }
+
+  logMlSubprocessDiagnostic(endpoint, subprocess);
+  if (subprocess.outcome !== 'normal') {
+    console.warn('ML prediction unavailable; using baseline risk fallback.');
+    const reason = subprocess.outcome === 'timed_out'
+      ? 'ML prediction timed out; baseline rule engine used.'
+      : subprocess.outcome === 'terminated'
+        ? 'ML prediction process was terminated; baseline rule engine used.'
+        : 'ML prediction failed; baseline rule engine used.';
+    return {
+      __mlUnavailable: true,
+      reason,
+      exit_code: subprocess.exit_code
+    };
+  }
+
+  try {
     const weights = { LOW: 10, MEDIUM: 35, HIGH: 65, CRITICAL: 90 };
     const score = Math.round(numeric(parsed.risk_score, weights[parsed.risk_level] || 50));
     return {
@@ -206,25 +335,11 @@ async function predictWithMl(features) {
       ml_available: true,
       python_bin: python
     };
-  } catch (error) {
-    const summary = summarizeMlSubprocessFailure(error, python, ML_MODEL_PATH);
-    const detail = [
-      summary.error_message,
-      summary.exit_code != null ? `exit_code=${summary.exit_code}` : null,
-      summary.signal ? `signal=${summary.signal}` : null,
-      summary.killed ? 'killed=true' : null,
-      summary.timed_out ? 'timed_out=true' : null,
-      summary.stderr ? `stderr=${summary.stderr}` : null,
-      summary.stdout ? `stdout=${summary.stdout}` : null
-    ].filter(Boolean).join(' | ');
-    console.error('ML prediction subprocess failed:', summary);
-    console.warn('ML prediction unavailable; using baseline risk fallback:', detail || 'Command failed');
+  } catch (_) {
     return {
       __mlUnavailable: true,
-      reason: detail || 'Python ML prediction failed.',
-      python_bin: python,
-      error_detail: summary.stderr || summary.stdout || summary.error_message,
-      exit_code: summary.exit_code
+      reason: 'ML prediction failed; baseline rule engine used.',
+      exit_code: subprocess.exit_code
     };
   }
 }
@@ -258,7 +373,7 @@ function pathForPermission(value) {
   return known.find(name => text.endsWith('/' + name)) || text;
 }
 
-exports.summarizeMlSubprocessFailure = summarizeMlSubprocessFailure;
+exports.runMlSubprocess = runMlSubprocess;
 exports.predictWithMl = predictWithMl;
 exports.ruleEngineRisk = ruleEngineRisk;
 
@@ -559,7 +674,11 @@ exports.handler = async (event) => {
       let pythonMessage = '';
       let testPrediction = null;
       try {
-        await execFileAsync(python, ['-c', 'import joblib, sklearn, pandas, numpy; print(\"OK\")'], { timeout: 10000, windowsHide: true });
+        await withMlSubprocessSlot(() => execFileAsync(
+          python,
+          ['-c', 'import joblib, sklearn, pandas, numpy; print(\"OK\")'],
+          { timeout: 10000, windowsHide: true }
+        ));
         pythonOk = true;
       } catch (error) {
         pythonMessage = (error.stderr || error.message || 'Python ML dependencies are unavailable.').trim();
@@ -567,11 +686,11 @@ exports.handler = async (event) => {
 
       if (pythonOk && modelExists && predictorExists) {
         try {
-          const { stdout } = await execFileAsync(python, [
+          const { stdout } = await withMlSubprocessSlot(() => execFileAsync(python, [
             ML_PREDICT_PATH,
             '--model', ML_MODEL_PATH,
             '--json', JSON.stringify({ wear_level: 1, crack_level: 0, corrosion_level: 0 })
-          ], { timeout: 10000, windowsHide: true });
+          ], { timeout: 10000, windowsHide: true }));
           testPrediction = JSON.parse(String(stdout).trim());
         } catch (predErr) {
           pythonOk = false;
@@ -605,7 +724,7 @@ exports.handler = async (event) => {
       const rows = Array.isArray(inspections) ? inspections : [];
       const latest = rows[0] || null;
       const features = mlFeatures(asset, latest);
-      const ml = latest ? await predictWithMl(features) : null;
+      const ml = latest ? await predictWithMl(features, '/api/risk') : null;
 
       const failed = rows.filter(r => r.status === 'Failed').length;
       const pending = rows.filter(r => r.status === 'Pending').length;
@@ -686,7 +805,7 @@ exports.handler = async (event) => {
           const rows = inspections.filter(i => i.asset_id === asset.id).sort((a,b) => new Date(b.inspected_at || b.created_at || 0) - new Date(a.inspected_at || a.created_at || 0));
           const latest = rows[0] || null;
           const features = mlFeatures(assetRows[0], latest);
-          const ml = latest ? await predictWithMl(features) : null;
+          const ml = latest ? await predictWithMl(features, '/api/analytics') : null;
           const failed = rows.filter(r => r.status === 'Failed').length;
           const pending = rows.filter(r => r.status === 'Pending').length;
           let score = 0;

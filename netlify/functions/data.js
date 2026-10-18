@@ -1,4 +1,4 @@
-const { response, getBody, authenticatedUser, supabaseRequest } = require('./_auth');
+const { response, getBody, authenticatedUser, isAdmin, supabaseRequest } = require('./_auth');
 const { requirePermission, validateText } = require('./_security');
 const fs = require('fs');
 const path = require('path');
@@ -272,6 +272,57 @@ function logMlSubprocessDiagnostic(endpoint, result) {
   }));
 }
 
+const ML_DIAGNOSTIC_STAGES = new Set(['dependency_import', 'model_loading', 'inference']);
+const ML_DIAGNOSTIC_ERROR_CATEGORIES = new Set([
+  'dependency_import_failed',
+  'model_loading_failed',
+  'inference_failed'
+]);
+
+function parseMlDiagnosticEvents(output) {
+  const stages = [];
+  for (const line of String(output || '').split(/\r?\n/)) {
+    try {
+      const event = JSON.parse(line);
+      if (
+        event?.type !== 'stage' ||
+        !ML_DIAGNOSTIC_STAGES.has(event.stage) ||
+        !['started', 'completed', 'failed'].includes(event.status) ||
+        !Number.isFinite(event.elapsed_ms)
+      ) continue;
+      stages.push({
+        stage: event.stage,
+        status: event.status,
+        elapsed_ms: Math.max(0, Math.round(event.elapsed_ms)),
+        ...(ML_DIAGNOSTIC_ERROR_CATEGORIES.has(event.error_category)
+          ? { error_category: event.error_category }
+          : {})
+      });
+    } catch (_) {
+      // Diagnostic output is intentionally restricted to recognized JSON events.
+    }
+  }
+  return stages;
+}
+
+async function runMlDiagnostics(executeSubprocess = runMlSubprocess) {
+  const result = await executeSubprocess(
+    getPythonBin(),
+    ['-u', ML_PREDICT_PATH, '--model', ML_MODEL_PATH, '--diagnostic'],
+    '/api/ml-status'
+  );
+  return {
+    outcome: result.outcome,
+    elapsed_ms: result.elapsed_ms,
+    stages: parseMlDiagnosticEvents(result.stdout)
+  };
+}
+
+async function handleMlDiagnostic(user, runDiagnostic = runMlDiagnostics) {
+  if (!isAdmin(user)) return response(403, { message: 'Admin access required.' });
+  return response(200, { diagnostic: await runDiagnostic() });
+}
+
 async function predictWithMl(features, endpoint = '/api/risk', executeSubprocess = runMlSubprocess) {
   if (!fs.existsSync(ML_MODEL_PATH) || !fs.existsSync(ML_PREDICT_PATH)) {
     return { __mlUnavailable: true, reason: 'ML model files are unavailable; baseline rule engine used.' };
@@ -376,6 +427,9 @@ function pathForPermission(value) {
 exports.runMlSubprocess = runMlSubprocess;
 exports.predictWithMl = predictWithMl;
 exports.ruleEngineRisk = ruleEngineRisk;
+exports.parseMlDiagnosticEvents = parseMlDiagnosticEvents;
+exports.handleMlDiagnostic = handleMlDiagnostic;
+exports.runMlDiagnostics = runMlDiagnostics;
 
 exports.handler = async (event) => {
   try {
@@ -667,6 +721,7 @@ exports.handler = async (event) => {
 
     if (path.endsWith('/ml-status')) {
       if (method !== 'GET') return response(405, { message: 'Method not allowed.' });
+      if (q.diagnostic === '1') return await handleMlDiagnostic(user);
       const modelExists = fs.existsSync(ML_MODEL_PATH);
       const predictorExists = fs.existsSync(ML_PREDICT_PATH);
       const python = getPythonBin();

@@ -4,7 +4,15 @@ const { EventEmitter } = require('node:events');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { predictWithMl, ruleEngineRisk, runMlSubprocess } = require('./data');
+const {
+  handleMlDiagnostic,
+  handler,
+  parseMlDiagnosticEvents,
+  predictWithMl,
+  ruleEngineRisk,
+  runMlDiagnostics,
+  runMlSubprocess
+} = require('./data');
 
 function fakeSpawn({ stdout = '', exitCode = 0, signal = null, delayMs = 0 } = {}) {
   return () => {
@@ -289,6 +297,145 @@ test('rule-based fallback provides no unsupported confidence or probabilities', 
   assert.equal(Object.hasOwn(result, 'probabilities'), false);
   assert.equal(result.ml_available, false);
   assert.equal(result.fallback_used, true);
+});
+
+test('requires authentication before serving ML diagnostic results', async () => {
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await handler({
+      httpMethod: 'GET',
+      path: '/api/ml-status',
+      queryStringParameters: { diagnostic: '1' },
+      headers: {}
+    });
+
+    assert.equal(result.statusCode, 401);
+    assert.deepEqual(JSON.parse(result.body), { message: 'Not authenticated' });
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('denies ML diagnostics to authenticated non-admin users', async () => {
+  let diagnosticCalled = false;
+  const result = await handleMlDiagnostic(
+    { id: 'operator-user', role: 'operator' },
+    async () => { diagnosticCalled = true; return {}; }
+  );
+
+  assert.equal(result.statusCode, 403);
+  assert.deepEqual(JSON.parse(result.body), { message: 'Admin access required.' });
+  assert.equal(diagnosticCalled, false);
+});
+
+test('allows administrators to request bounded ML diagnostics', async () => {
+  const result = await handleMlDiagnostic(
+    { id: 'admin-user', role: 'admin' },
+    async () => ({
+      outcome: 'normal',
+      elapsed_ms: 10,
+      stages: [{ stage: 'inference', status: 'completed', elapsed_ms: 2 }]
+    })
+  );
+
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(JSON.parse(result.body), {
+    diagnostic: {
+      outcome: 'normal',
+      elapsed_ms: 10,
+      stages: [{ stage: 'inference', status: 'completed', elapsed_ms: 2 }]
+    }
+  });
+});
+
+test('filters diagnostic events to allowlisted fields and values', () => {
+  const output = [
+    JSON.stringify({
+      type: 'stage',
+      stage: 'dependency_import',
+      status: 'completed',
+      elapsed_ms: 123.4,
+      environment: 'must-not-appear',
+      feature_values: { wear_level: 5 }
+    }),
+    JSON.stringify({
+      type: 'stage',
+      stage: 'model_loading',
+      status: 'failed',
+      elapsed_ms: 4,
+      error_category: 'model_loading_failed',
+      error: 'secret token'
+    }),
+    JSON.stringify({
+      type: 'stage',
+      stage: 'unknown_stage',
+      status: 'completed',
+      elapsed_ms: 5
+    }),
+    'raw token output'
+  ].join('\n');
+  const stages = parseMlDiagnosticEvents(output);
+
+  assert.deepEqual(stages, [
+    {
+      stage: 'dependency_import',
+      status: 'completed',
+      elapsed_ms: 123,
+    },
+    {
+      stage: 'model_loading',
+      status: 'failed',
+      elapsed_ms: 4,
+      error_category: 'model_loading_failed',
+    }
+  ]);
+  assert.doesNotMatch(JSON.stringify(stages), /environment|wear_level|secret token|raw token/);
+});
+
+test('runs bounded local diagnostic and returns only safe stage measurements', async () => {
+  const result = await runMlDiagnostics();
+
+  assert.equal(result.outcome, 'normal');
+  assert.equal(typeof result.elapsed_ms, 'number');
+  assert.deepEqual(result.stages.map(stage => [stage.stage, stage.status]), [
+    ['dependency_import', 'started'],
+    ['dependency_import', 'completed'],
+    ['model_loading', 'started'],
+    ['model_loading', 'completed'],
+    ['inference', 'started'],
+    ['inference', 'completed']
+  ]);
+  for (const stage of result.stages) {
+    assert.ok(Number.isFinite(stage.elapsed_ms));
+    assert.ok(['dependency_import', 'model_loading', 'inference'].includes(stage.stage));
+    assert.ok(['started', 'completed', 'failed'].includes(stage.status));
+    assert.ok(Object.keys(stage).every(key =>
+      ['stage', 'status', 'elapsed_ms', 'error_category'].includes(key)
+    ));
+  }
+  assert.doesNotMatch(JSON.stringify(result), /\/opt\/|\/Users\/|wear_level|asset_id|token|SUPABASE/);
+});
+
+test('keeps safe stage progress when the diagnostic subprocess times out', async () => {
+  const result = await runMlDiagnostics(async () => ({
+    outcome: 'timed_out',
+    elapsed_ms: 60000,
+    stdout: [
+      JSON.stringify({ type: 'stage', stage: 'dependency_import', status: 'completed', elapsed_ms: 1200 }),
+      JSON.stringify({ type: 'stage', stage: 'model_loading', status: 'started', elapsed_ms: 0 }),
+      JSON.stringify({ type: 'stage', stage: 'model_loading', status: 'completed', elapsed_ms: 2200, path: '/private/model.pkl' }),
+      'secret token output'
+    ].join('\n')
+  }));
+
+  assert.equal(result.outcome, 'timed_out');
+  assert.deepEqual(result.stages, [
+    { stage: 'dependency_import', status: 'completed', elapsed_ms: 1200 },
+    { stage: 'model_loading', status: 'started', elapsed_ms: 0 },
+    { stage: 'model_loading', status: 'completed', elapsed_ms: 2200 }
+  ]);
+  assert.doesNotMatch(JSON.stringify(result), /private|token|path/);
 });
 
 test('logs safe diagnostics and keeps the baseline fallback on subprocess failure', async () => {

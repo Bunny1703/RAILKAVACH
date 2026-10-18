@@ -166,11 +166,6 @@ function summarizeMlSubprocessFailure(error, python, modelPath) {
 }
 
 async function predictWithMl(features) {
-  const isRenderRuntime = String(process.env.RENDER || '').toLowerCase() === 'true';
-  if (isRenderRuntime) {
-    return ruleEngineRisk(features);
-  }
-
   if (!fs.existsSync(ML_MODEL_PATH) || !fs.existsSync(ML_PREDICT_PATH)) {
     return { __mlUnavailable: true, reason: 'ML model files are missing on disk.' };
   }

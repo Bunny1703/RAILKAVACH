@@ -43,23 +43,61 @@ test('captures timeout kills from the Python ML subprocess', () => {
   assert.match(result.error_message, /timed out/);
 });
 
-test('uses the Render-safe rule engine fallback instead of invoking Python', async () => {
+test('uses the real Python ML predictor on Render when the venv is available', async () => {
   process.env.RENDER = 'true';
   const result = await predictWithMl({
-    asset_age_years: 0.2,
-    wear_level: 3,
-    corrosion_level: 2,
-    crack_level: 1,
-    deformation_level: 2,
-    vibration_level: 2,
-    temperature_c: 32,
-    maintenance_count: 1,
+    asset_age_years: 2,
+    wear_level: 1,
+    corrosion_level: 0,
+    crack_level: 0,
+    deformation_level: 0,
+    vibration_level: 1,
+    temperature_c: 30,
+    maintenance_count: 0,
     previous_failures: 0,
-    days_since_last_inspection: 60
+    days_since_last_inspection: 5
   });
 
-  assert.equal(result.method, 'render-rule-engine');
-  assert.equal(result.__mlUnavailable, true);
+  assert.equal(result.ml_available, true);
+  assert.equal(result.method, 'tree-ensemble-ml-with-safety-guardrail');
   assert.match(result.risk_level, /LOW|MEDIUM|HIGH|CRITICAL/);
+  assert.equal(typeof result.score, 'number');
   delete process.env.RENDER;
+});
+
+test('runs the real Python ML predictor successfully with the bundled model', async () => {
+  delete process.env.RENDER;
+  const result = await predictWithMl({
+    asset_age_years: 2,
+    wear_level: 1,
+    corrosion_level: 0,
+    crack_level: 0,
+    deformation_level: 0,
+    vibration_level: 1,
+    temperature_c: 30,
+    maintenance_count: 0,
+    previous_failures: 0,
+    days_since_last_inspection: 5
+  });
+
+  assert.equal(result.ml_available, true);
+  assert.equal(result.method, 'tree-ensemble-ml-with-safety-guardrail');
+  assert.match(result.risk_level, /LOW|MEDIUM|HIGH|CRITICAL/);
+  assert.equal(typeof result.score, 'number');
+  assert.ok(result.python_bin);
+});
+
+test('reports a missing model file with a non-zero exit and stderr details', () => {
+  const { spawnSync } = require('node:child_process');
+  const { getPythonBin } = require('./_python');
+  const python = getPythonBin();
+  const result = spawnSync(python, [
+    require('path').join(__dirname, '..', '..', 'ml', 'predict.py'),
+    '--model', require('path').join(__dirname, '..', '..', 'ml', 'model', 'missing-risk-model.pkl'),
+    '--json', JSON.stringify({ asset_age_years: 1, wear_level: 1 })
+  ], { encoding: 'utf8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(String(result.stderr || ''), /Model file does not exist/);
+  assert.match(String(result.stderr || ''), /resolved:/i);
 });
